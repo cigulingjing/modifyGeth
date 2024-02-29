@@ -1,0 +1,165 @@
+syntax = "proto3";
+package pb;
+
+option go_package="./pb";
+
+enum MessageType{
+  Block_Data = 0;
+  Block_Request = 1;
+  Block_Response = 2;
+  PoT_Request = 3;
+  PoT_Response = 4;
+  PoT_Proof = 5;
+}
+message Block {
+  Header Header = 1;
+  repeated Tx Txs = 2;
+}
+
+message Tx{
+  bytes data = 1;
+}
+
+message PoTMessage {
+  MessageType  MsgType = 1;
+  bytes  MsgByte = 2;
+}
+
+message Header{
+  uint64 Height = 1;
+  bytes  ParentHash = 2;
+  repeated bytes UncleHash = 3;
+  bytes Mixdigest = 4;
+  bytes Difficulty = 5;
+  int64 Nonce = 6;
+  bytes Timestamp = 7;
+  repeated bytes PoTProof = 8;
+  int64 Address = 9;
+  bytes Hashes =10;
+  string PeerId = 11;
+  bytes Pubkey = 12;
+  bytes Txhash = 13;
+}
+
+
+
+message BlockRequest {
+  uint64 Height = 1;
+  bytes  Hashes = 2;
+  int64  srcid = 3;
+  int64  desid = 4;
+  string src =5;
+  string des = 6;
+}
+
+message BlockResponse{
+  Block block =1;
+  string src = 2;
+  string des = 3;
+  int64  srcid = 4;
+  int64  desid = 5;
+
+}
+
+message PoTRequest{
+  uint64 Epoch = 1;
+  int64  Desid = 2;
+  string Des = 3;
+  int64  Srcid = 4;
+  string Src = 5 ;
+}
+
+message PotProof{
+  uint64 Epoch = 1;
+  bytes  Proof = 2;
+  string Src = 3;
+  string Des = 4;
+}
+
+message PoTResponse{
+  uint64 Epoch = 1;
+  int64  Desid = 2;
+  string Des = 3;
+  int64  Srcid = 4;
+  string Src = 5 ;
+  bytes  Proof = 6;
+}
+
+enum TxDataType{
+  RawTx = 0;
+  ExcutedTx = 1;
+}
+
+message TxData {
+  TxDataType TxDataType= 1;
+  bytes TxData = 2;
+}
+
+
+
+message RawTxData {
+  bytes   ChainID = 1;
+  uint64  Nonce = 2;
+  bytes   GasPrice = 3;
+  uint64  Gas = 4;
+  bytes   To =5;
+  bytes   Data =6;
+  bytes   Value = 7;
+  bytes   V = 8;
+  bytes   R = 9;
+  bytes   S = 10;
+  bytes   Accesslist = 11;
+}
+
+message ExecutedTxData{
+  uint64  ExecutedHeight = 1;
+  bytes   TxHash = 2;
+}
+message ExecuteBlock {
+  ExecuteHeader Header = 1;
+  repeated ExecutedTx Txs= 2;
+}
+
+message ExecuteHeader {
+  uint64 Height = 1;
+}
+
+message ExecutedTx{
+  bytes   TxHash = 1;
+  uint64  Height = 2;
+  bytes   Data = 3;
+}
+
+service PoTExecutor {
+  rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
+  rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
+  rpc   CommitTxs(CommitTxsRequest) returns (CommitTxsResponse){}
+}
+
+message GetTxRequest{
+  uint64 StartHeight = 1;
+  string Des = 2;
+}
+
+message GetTxResponse{
+  uint64 Start = 1;
+  uint64 End = 2;
+  repeated ExecuteBlock Blocks = 3;
+}
+
+message VerifyTxRequest{
+  repeated ExecutedTxData Txs = 1;
+}
+
+message VerifyTxResponse{
+  repeated ExecutedTxData Txs = 1;
+  repeated bool flag =2;
+}
+
+message CommitTxsRequest{
+  repeated RawTxData Txs = 1;
+}
+
+message CommitTxsResponse{
+
+}
