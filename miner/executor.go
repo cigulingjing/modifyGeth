@@ -198,8 +198,8 @@ type executor struct {
 
 	resubmitIntervalCh chan time.Duration
 
-	chainHeadCh  chan core.ChainHeadEvent
-	chainHeadSub event.Subscription
+	// chainHeadCh  chan core.ChainHeadEvent
+	// chainHeadSub event.Subscription
 
 	newWorkCh chan *newWorkReq // to launch a new batch to consensus
 	execCh    chan *execReq    // received from consensus, and go to execute
@@ -251,7 +251,7 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 		extra:    config.ExtraData,
 		// pendingTasks: make(map[common.Hash]*task),
 
-		chainHeadCh: make(chan core.ChainHeadEvent, chainHeadChanSize),
+		// chainHeadCh: make(chan core.ChainHeadEvent, chainHeadChanSize),
 
 		startCh: make(chan struct{}, 1),
 		exitCh:  make(chan struct{}),
@@ -263,7 +263,7 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 	}
 
 	// Subscribe events for blockchain
-	executor.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(executor.chainHeadCh)
+	// executor.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(executor.chainHeadCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	// recommit := executor.config.Recommit
@@ -443,13 +443,13 @@ func (e *executor) newExecLoop(recommit time.Duration) {
 				commit(commitInterruptResubmit)
 			}
 
-		case head := <-e.chainHeadCh:
-			// clearPending(head.Block.NumberU64())
-			// no use
-			head.Block.Number()
-			timestamp = time.Now().Unix()
-			// make a block and send a block! 666
-			commit(commitInterruptNewHead)
+		// case head := <-e.chainHeadCh:
+		// 	// clearPending(head.Block.NumberU64())
+		// 	// no use
+		// 	head.Block.Number()
+		// 	timestamp = time.Now().Unix()
+		// 	// make a block and send a block! 666
+		// 	commit(commitInterruptNewHead)
 
 		case <-e.exitCh:
 			return
@@ -548,10 +548,10 @@ func (e *executor) sendLoop() {
 }
 
 func (e *executor) sendNewTxBatch(interrupt *atomic.Int32, timestamp int64) {
-	// // Abort committing if node is still syncing
-	// if e.syncing.Load() {
-	// 	return
-	// }
+	// Abort committing if node is still syncing
+	if e.syncing.Load() {
+		return
+	}
 
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
