@@ -178,7 +178,12 @@ func newTestExecutor(chainConfig *params.ChainConfig, engine consensus.Engine, d
 	}
 	p2pClient := pb.NewP2PClient(conn)
 
-	e := newExecutor(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, p2pClient)
+	conn1, err := grpc.Dial("127.0.0.1:1145", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Println(err)
+	}
+	transferClient := pb.NewTransferGRPCClient(conn1)
+	e := newExecutor(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, p2pClient, transferClient)
 	e.coinbase = testBankAddress
 	return e, backend
 }

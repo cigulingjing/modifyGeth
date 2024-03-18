@@ -101,6 +101,13 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	}
 	potClient := pb.NewPoTExecutorClient(conn1)
 
+	// Transfer Client
+	conn2, err := grpc.Dial("127.0.0.1:1145", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Println(err)
+	}
+	transferClient := pb.NewTransferGRPCClient(conn2)
+
 	miner := &Miner{
 		mux:     mux,
 		eth:     eth,
@@ -109,7 +116,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		startCh: make(chan struct{}),
 		stopCh:  make(chan struct{}),
 		// worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		executor: newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient),
+		executor: newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient, transferClient),
 		poter:    newPoter(eth, potClient),
 	}
 	miner.wg.Add(1)

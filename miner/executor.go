@@ -138,7 +138,9 @@ func (es *executorServer) VerifyTx(ctx context.Context, pTx *pb.Transaction) (*p
 //----------------------------------------------------------------------------------------------
 
 type executorClient struct {
-	p2pClient pb.P2PClient // to send txs to consensus layer
+	consensusClient pb.P2PClient // to send txs to consensus layer
+
+	transferClient pb.TransferGRPCClient
 }
 
 // need add a loop routine to sendTx to consensus layer, when execCh has new txs
@@ -167,7 +169,7 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 		Epoch:       -1,
 		Type:        pb.PacketType_CLIENTPACKET,
 	}
-	_, err = ec.p2pClient.Send(context.Background(), packet)
+	_, err = ec.consensusClient.Send(context.Background(), packet)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +231,7 @@ type executor struct {
 }
 
 // newExecutor creates a new executor.
-func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, cli pb.P2PClient) *executor {
+func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, consensusCli pb.P2PClient, transferCli pb.TransferGRPCClient) *executor {
 	executor := &executor{
 		config:      config,
 		chainConfig: chainConfig,
@@ -276,7 +278,10 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 	executor.recommit = recommit
 
 	// Register the grpc client
-	executor.execClient = &executorClient{p2pClient: cli}
+	executor.execClient = &executorClient{
+		consensusClient: consensusCli,
+		transferClient:  transferCli,
+	}
 
 	// Register the grpc server
 	executorServer := executorServer{executorPtr: executor}
@@ -757,6 +762,15 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 
 // 看看交易执行成功没有，如果成功把它收集进Env里
 func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) ([]*types.Log, error) {
+	// TODO : send to transfer
+	if tx.Data() == nil {
+		from, err := types.Sender(env.signer, tx)
+		if err != nil {
+			panic(err)
+		}
+		e.execClient.transferClient.ToTransferCommit(context.Background(), &pb.ToTransferRequest{FromAddress: from.Bytes(), BAddress: tx.To().Bytes(), Amount: int32(tx.Value().Int64())})
+	}
+
 	receipt, err := e.applyTransaction(env, tx)
 	if err != nil {
 		return nil, err

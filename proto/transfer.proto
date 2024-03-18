@@ -1,0 +1,16 @@
+syntax = "proto3";
+package pb;
+option go_package = "./";
+
+service TransferGRPC {
+  rpc ToTransferCommit (ToTransferRequest) returns(ToTransferReply) {}
+}
+message ToTransferRequest {
+  bytes FromAddress = 1;
+  bytes BAddress = 2;
+  int32 Amount = 3;
+}
+
+message ToTransferReply {
+    bool Result = 1;
+}
