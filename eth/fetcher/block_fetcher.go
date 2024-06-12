@@ -266,6 +266,7 @@ func (f *BlockFetcher) Enqueue(peer string, block *types.Block) error {
 	}
 	select {
 	case f.inject <- op:
+		// log.Info("put the op into the f.inject", "peer infor:", op.origin)
 		return nil
 	case <-f.quit:
 		return errTerminated
@@ -351,6 +352,7 @@ func (f *BlockFetcher) loop() {
 		// Import any queued blocks that could potentially fit
 		height := f.chainHeight()
 		for !f.queue.Empty() {
+			// log.Info("yes! now i am in there ")
 			op := f.queue.PopItem()
 			hash := op.hash()
 			if f.queueChangeHook != nil {
@@ -426,6 +428,7 @@ func (f *BlockFetcher) loop() {
 			if f.light {
 				continue
 			}
+			// log.Info("now start the f.enqueue")
 			f.enqueue(op.origin, nil, op.block)
 
 		case hash := <-f.done:
@@ -758,6 +761,7 @@ func (f *BlockFetcher) rescheduleComplete(complete *time.Timer) {
 // enqueue schedules a new header or block import operation, if the component
 // to be imported has not yet been seen.
 func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.Block) {
+	// log.Info("yeah i into enqueue")
 	var (
 		hash   common.Hash
 		number uint64
@@ -773,6 +777,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		log.Debug("Discarded delivered header or block, exceeded allowance", "peer", peer, "number", number, "hash", hash, "limit", blockLimit)
 		blockBroadcastDOSMeter.Mark(1)
 		f.forgetHash(hash)
+		// log.Info("fail in 1")
 		return
 	}
 	// Discard any past or too distant blocks
@@ -780,6 +785,7 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		log.Debug("Discarded delivered header or block, too far away", "peer", peer, "number", number, "hash", hash, "distance", dist)
 		blockBroadcastDropMeter.Mark(1)
 		f.forgetHash(hash)
+		// log.Info("fail in 2")
 		return
 	}
 	// Schedule the block for future importing
@@ -862,12 +868,14 @@ func (f *BlockFetcher) importBlocks(peer string, block *types.Block) {
 
 		default:
 			// Something went very wrong, drop the peer
+			// log.Error("veriy header is wrong", "err", err)
 			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
 		}
 		// Run the actual import and log any issues
 		if _, err := f.insertChain(types.Blocks{block}); err != nil {
+			log.Info("success insert chain")
 			log.Debug("Propagated block import failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			return
 		}

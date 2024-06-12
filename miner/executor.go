@@ -200,6 +200,8 @@ type executor struct {
 
 	resubmitIntervalCh chan time.Duration
 
+	// Subscriptions
+	mux *event.TypeMux
 	// chainHeadCh  chan core.ChainHeadEvent
 	// chainHeadSub event.Subscription
 
@@ -238,6 +240,7 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 		engine:      engine,
 		eth:         eth,
 		chain:       eth.BlockChain(),
+		mux:         mux,
 
 		opts: &txpool.ValidationOptions{
 			Config: chainConfig,
@@ -495,8 +498,15 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 		// ! TODO:just for test
-		Difficulty: big.NewInt(0),
+		Difficulty: big.NewInt(1),
 	}
+
+	// Set the extra field.
+	if len(e.extra) != 0 {
+		// fmt.Println("executor hearder extra len:", len(e.extra))
+		header.Extra = e.extra
+	}
+
 	// Adding EIP 1559 logic
 	if e.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(e.chainConfig, parent)
@@ -834,9 +844,15 @@ func (e *executor) writeToChain(env *executor_env) error {
 		log.Error("Failed writing block to chain", "err", err)
 		return err
 	}
-	fmt.Println(e.eth.BlockChain().CurrentBlock().Number)
+
+	// fmt.Println(e.eth.BlockChain().CurrentBlock().Number)
+	log.Info("Successfully sealed new block", "number", block.Number(), "hash", hash)
 	// 比较有信心说，这就是我的env
 	e.env = env.copy()
+
+	// emit broadcast
+	e.mux.Post(core.NewMinedBlockEvent{Block: block})
+
 	return nil
 }
 

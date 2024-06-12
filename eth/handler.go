@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -210,12 +209,16 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// the chain has finished the transition or not, the PoS headers
 		// should only come from the trusted consensus layer instead of
 		// p2p network.
-		if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
-			if beacon.IsPoSHeader(header) {
-				return errors.New("unexpected post-merge header")
-			}
-		}
-		return h.chain.Engine().VerifyHeader(h.chain, header)
+
+		// if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
+		// 	if beacon.IsPoSHeader(header) {
+		// 		return errors.New("unexpected post-merge header")
+		// 	}
+		// }
+
+		// TODO:暂时把这个检查改为nil
+		// return h.chain.Engine().VerifyHeader(h.chain, header)
+		return nil
 	}
 	heighter := func() uint64 {
 		return h.chain.CurrentBlock().Number.Uint64()
@@ -240,10 +243,11 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		// accept each others' blocks until a restart. Unfortunately we haven't figured
 		// out a way yet where nodes can decide unilaterally whether the network is new
 		// or not. This should be fixed if we figure out a solution.
-		if !h.synced.Load() {
-			log.Warn("Syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
-			return 0, nil
-		}
+		// TODO: 暂时去掉这个检查
+		// if !h.synced.Load() {
+		// 	log.Warn("Syncing, discarded propagated block", "number", blocks[0].Number(), "hash", blocks[0].Hash())
+		// 	return 0, nil
+		// }
 		if h.merger.TDDReached() {
 			// The blocks from the p2p network is regarded as untrusted
 			// after the transition. In theory block gossip should be disabled
@@ -345,8 +349,10 @@ func (h *handler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 		hash    = head.Hash()
 		number  = head.Number.Uint64()
 		td      = h.chain.GetTd(hash, number)
+		// td = head.Number
 	)
 	forkID := forkid.NewID(h.chain.Config(), genesis, number, head.Time)
+	// TODO: need to revise td
 	if err := peer.Handshake(h.networkID, td, hash, genesis.Hash(), forkID, h.forkFilter); err != nil {
 		peer.Log().Debug("Ethereum handshake failed", "err", err)
 		return err
@@ -558,14 +564,17 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 	// Disable the block propagation if the chain has already entered the PoS
 	// stage. The block propagation is delegated to the consensus layer.
 	if h.merger.PoSFinalized() {
+		// log.Warn("fail in 1")
 		return
 	}
 	// Disable the block propagation if it's the post-merge block.
-	if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
-		if beacon.IsPoSHeader(block.Header()) {
-			return
-		}
-	}
+	// if beacon, ok := h.chain.Engine().(*beacon.Beacon); ok {
+	// 	log.Warn("in 2 ")
+	// 	if beacon.IsPoSHeader(block.Header()) {
+	// 		log.Info("in 3")
+	// 		return
+	// 	}
+	// }
 	hash := block.Hash()
 	peers := h.peers.peersWithoutBlock(hash)
 
@@ -582,6 +591,7 @@ func (h *handler) BroadcastBlock(block *types.Block, propagate bool) {
 		// Send the block to a subset of our peers
 		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
+			log.Info("test transfer for----------------------------------")
 			peer.AsyncSendNewBlock(block, td)
 		}
 		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
@@ -654,7 +664,9 @@ func (h *handler) minedBroadcastLoop() {
 	defer h.wg.Done()
 
 	for obj := range h.minedBlockSub.Chan() {
+		// log.Info("get a mined block obj")
 		if ev, ok := obj.Data.(core.NewMinedBlockEvent); ok {
+			// log.Info("get a mined block signal")
 			h.BroadcastBlock(ev.Block, true)  // First propagate block to peers
 			h.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
@@ -683,7 +695,6 @@ func (h *handler) enableSyncedFeatures() {
 	// If we were running snap sync and it finished, disable doing another
 	// round on next sync cycle
 	if h.snapSync.Load() {
-		log.Info("xwk test!!!!!!!!!!!!!!!!!!!!!!!!!")
 		log.Info("Snap sync complete, auto disabling")
 		h.snapSync.Store(false)
 	}

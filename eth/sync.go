@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -106,8 +107,11 @@ func (cs *chainSyncer) loop() {
 		}
 		select {
 		case <-cs.peerEventCh:
+			log.Info("emit downloader loop in 1")
 			// Peer information changed, recheck.
 		case err := <-cs.doneCh:
+			log.Info("emit downloader loop in 2")
+			log.Error("sync error", "err", err)
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
@@ -120,6 +124,7 @@ func (cs *chainSyncer) loop() {
 				cs.warned = time.Now()
 			}
 		case <-cs.force.C:
+			log.Info("emit downloader loop in 3")
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
@@ -150,6 +155,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	// avoid triggering a sync in that case, but that could also miss sibling or
 	// other family TTD block being accepted.
 	if cs.handler.chain.Config().TerminalTotalDifficultyPassed || cs.handler.merger.TDDReached() {
+		log.Info("downloader sync fail in 2")
 		return nil
 	}
 	// Ensure we're at minimum peer count.
@@ -160,6 +166,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
+		log.Info("downloader sync fail in 3")
 		return nil
 	}
 	// We have enough peers, pick the one with the highest TD, but avoid going
@@ -170,17 +177,21 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil
 	}
 	mode, ourTD := cs.modeAndLocalHead()
+	// mode, _ := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
+	fmt.Println("ourTd:", ourTD.Uint64(), "op td:", op.td.Uint64())
 	if op.td.Cmp(ourTD) <= 0 {
 		// We seem to be in sync according to the legacy rules. In the merge
 		// world, it can also mean we're stuck on the merge block, waiting for
 		// a beacon client. In the latter case, notify the user.
-		if ttd := cs.handler.chain.Config().TerminalTotalDifficulty; ttd != nil && ourTD.Cmp(ttd) >= 0 && time.Since(cs.warned) > 10*time.Second {
-			log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
-			cs.warned = time.Now()
-		}
+		// if ttd := cs.handler.chain.Config().TerminalTotalDifficulty; ttd != nil && ourTD.Cmp(ttd) >= 0 && time.Since(cs.warned) > 10*time.Second {
+		// 	log.Warn("Local chain is post-merge, waiting for beacon client sync switch-over...")
+		// 	cs.warned = time.Now()
+		// }
+		log.Info("downloader sync fail in 5")
 		return nil // We're in sync
 	}
+	log.Info("downloader sync success,get a op")
 	return op
 }
 
@@ -228,8 +239,13 @@ func (cs *chainSyncer) startSync(op *chainSyncOp) {
 
 // doSync synchronizes the local blockchain with a remote peer.
 func (h *handler) doSync(op *chainSyncOp) error {
+	log.Info("can i get in th doSync???????")
 	// Run the sync cycle, and disable snap sync if we're past the pivot block
+
 	err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.Config().TerminalTotalDifficulty, op.mode)
+	// TODO : revise about td
+	// err := h.downloader.LegacySync(op.peer.ID(), op.head, op.td, h.chain.CurrentBlock().Number, op.mode)
+
 	if err != nil {
 		return err
 	}

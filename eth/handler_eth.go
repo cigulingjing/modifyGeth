@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+
 	"math/big"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
@@ -129,14 +131,36 @@ func (h *ethHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 
 	// Assuming the block is importable by the peer, but possibly not yet done so,
 	// calculate the head hash and TD that the peer truly must have.
+
+	// TODO：Revise about td
 	var (
 		trueHead = block.ParentHash()
 		trueTD   = new(big.Int).Sub(td, block.Difficulty())
 	)
+
+	// var (
+	// 	trueHead = block.ParentHash()
+	// 	trueTD   = block.Number()
+	// )
 	// Update the peer's total difficulty if better than the previous
+
+	// TODO：Remove the check about td
+	// 都是1
+	// _, td1 := peer.Head()
+	// fmt.Println("trueTD: ", trueTD, "peerTD: ", td1)
+
 	if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
 		peer.SetHead(trueHead, trueTD)
+		log.Info("emit the handlePeerEvent")
 		h.chainSync.handlePeerEvent()
 	}
+
+	// if getBlock's number > peer current blockNumber , then sync
+	// if _, td := peer.Head(); trueTD.Cmp(td) > 0 {
+	// 	peer.SetHead(trueHead, trueTD)
+	// 	h.chainSync.handlePeerEvent()
+	// }
+	// h.chainSync.handlePeerEvent()
+
 	return nil
 }
