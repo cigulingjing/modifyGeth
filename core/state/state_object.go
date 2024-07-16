@@ -544,3 +544,19 @@ func (s *stateObject) Nonce() uint64 {
 func (s *stateObject) Root() common.Hash {
 	return s.data.Root
 }
+
+func (s *stateObject) SetSecurityLevel(level uint64) {
+	s.db.journal.append(securityLevelChange{
+		account: &s.address,
+		prev:    s.data.SecurityLevel,
+	})
+	s.setSecurityLevel(level)
+}
+
+func (s *stateObject) setSecurityLevel(level uint64) {
+	s.data.SecurityLevel = level
+}
+
+func (s *stateObject) SecurityLevel() uint64 {
+	return s.data.SecurityLevel
+}

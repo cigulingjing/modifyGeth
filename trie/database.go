@@ -18,6 +18,7 @@ package trie
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -134,6 +135,7 @@ func (db *Database) Reader(blockRoot common.Hash) (Reader, error) {
 // Therefore, these maps must not be changed afterwards.
 func (db *Database) Update(root common.Hash, parent common.Hash, block uint64, nodes *trienode.MergedNodeSet, states *triestate.Set) error {
 	if db.preimages != nil {
+		fmt.Println("preimages is not nil")
 		db.preimages.commit(false)
 	}
 	return db.backend.Update(root, parent, block, nodes, states)

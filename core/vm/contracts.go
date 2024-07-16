@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/bls12381"
 	"github.com/ethereum/go-ethereum/crypto/bn256"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"golang.org/x/crypto/ripemd160"
 )
@@ -158,19 +157,14 @@ func init() {
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
 	case rules.IsCancun:
-		log.Info("iscancun")
 		return PrecompiledAddressesCancun
 	case rules.IsBerlin:
-		log.Info("isberlin")
 		return PrecompiledAddressesBerlin
 	case rules.IsIstanbul:
-		log.Info("isistanbul")
 		return PrecompiledAddressesIstanbul
 	case rules.IsByzantium:
-		log.Info("isbyzantium")
 		return PrecompiledAddressesByzantium
 	default:
-		log.Info("ishomestead")
 		return PrecompiledAddressesHomestead
 	}
 }

@@ -103,7 +103,7 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 		}
 		txs = append(txs, tx)
 	}
-	fmt.Println("get commited tx", time.Now(), txs.Len())
+	log.Info("get commited tx from consensus", "txs len:", txs.Len())
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
 		es.executorPtr.execCh <- &execReq{timestamp: time.Now().Unix(), txs: txs}
@@ -145,7 +145,7 @@ type executorClient struct {
 
 // need add a loop routine to sendTx to consensus layer, when execCh has new txs
 func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
-	fmt.Println("send tx", time.Now())
+	log.Info("send tx to consensus")
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -788,7 +788,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
-	fmt.Println("exec tx success")
+	log.Info("exec transaction success")
 	return receipt.Logs, nil
 }
 

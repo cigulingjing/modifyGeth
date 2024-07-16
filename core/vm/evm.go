@@ -28,6 +28,8 @@ import (
 	"github.com/holiman/uint256"
 )
 
+const GOVERNANCE = "0x0d77d7A0769eB6a70bc08C7D40C10AaB052b8c4c"
+
 type (
 	// CanTransferFunc is the signature of a transfer guard function
 	CanTransferFunc func(StateDB, common.Address, *uint256.Int) bool
@@ -206,6 +208,16 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
+	governanceAddr := common.HexToAddress(GOVERNANCE)
+	if caller.Address().Cmp(governanceAddr) == 0 && len(input) >= 3 {
+		if input[0] == 0x0A && input[1] == 0x0D {
+			var securityLevel uint64 = uint64(input[2])
+			evm.StateDB.SetSecurityLevel(addr, securityLevel)
+			log.Info("set security level done,", addr, " security level now is :", evm.StateDB.GetSecurityLevel(addr))
+			return nil, gas, nil
+		}
+	}
+
 	evm.Context.Transfer(evm.StateDB, caller.Address(), addr, value)
 
 	// Capture the tracer start/end events in debug mode
@@ -227,6 +239,15 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
+		// security level check
+		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
+		addrSL := evm.StateDB.GetSecurityLevel(addr)
+		// EOA securityLevel is zero, so EOA can call any contract. This rule just ensure that contract can't call contract with lower security level.
+		if callerSL > addrSL {
+			log.Warn("caller security level is higher than contract security level, caller:", caller.Address(), "caller's security levle", evm.StateDB.GetSecurityLevel(caller.Address()), " contract:", addr, "contract's security levle", evm.StateDB.GetSecurityLevel(addr))
+			return nil, gas, ErrSecurityTooLow
+		}
+
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
 		code := evm.StateDB.GetCode(addr)
@@ -290,6 +311,14 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
+		// security level check
+		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
+		addrSL := evm.StateDB.GetSecurityLevel(addr)
+		// EOA securityLevel is zero, so EOA can call any contract. This rule just ensure that contract can't call contract with lower security level.
+		if callerSL > addrSL {
+			return nil, gas, ErrSecurityTooLow
+		}
+
 		addrCopy := addr
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -335,6 +364,14 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
+		// security level check
+		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
+		addrSL := evm.StateDB.GetSecurityLevel(addr)
+		// EOA securityLevel is zero, so EOA can call any contract. This rule just ensure that contract can't call contract with lower security level.
+		if callerSL > addrSL {
+			return nil, gas, ErrSecurityTooLow
+		}
+
 		addrCopy := addr
 		// Initialise a new contract and make initialise the delegate values
 		contract := NewContract(caller, AccountRef(caller.Address()), nil, gas).AsDelegate()
@@ -384,6 +421,14 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas)
 	} else {
+		// security level check
+		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
+		addrSL := evm.StateDB.GetSecurityLevel(addr)
+		// EOA securityLevel is zero, so EOA can call any contract. This rule just ensure that contract can't call contract with lower security level.
+		if callerSL > addrSL {
+			return nil, gas, ErrSecurityTooLow
+		}
+
 		// At this point, we use a copy of address. If we don't, the go compiler will
 		// leak the 'contract' to the outer scope, and make allocation for 'contract'
 		// even if the actual execution ends on RunPrecompiled above.
@@ -451,6 +496,9 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		evm.StateDB.SetNonce(address, 1)
 	}
 	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+
+	// init security level = 1
+	evm.StateDB.SetSecurityLevel(address, 1)
 
 	// Initialise a new contract and set the code that is to be used by the EVM.
 	// The contract is a scoped environment for this execution context only.

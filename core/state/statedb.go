@@ -575,10 +575,11 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				return nil
 			}
 			data = &types.StateAccount{
-				Nonce:    acc.Nonce,
-				Balance:  acc.Balance,
-				CodeHash: acc.CodeHash,
-				Root:     common.BytesToHash(acc.Root),
+				Nonce:         acc.Nonce,
+				Balance:       acc.Balance,
+				CodeHash:      acc.CodeHash,
+				Root:          common.BytesToHash(acc.Root),
+				SecurityLevel: acc.SecurityLevel,
 			}
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = types.EmptyCodeHash.Bytes()
@@ -1407,4 +1408,20 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 		}
 	}
 	return copied
+}
+
+// security level
+func (s *StateDB) GetSecurityLevel(addr common.Address) uint64 {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.SecurityLevel()
+	}
+	return 0
+}
+
+func (s *StateDB) SetSecurityLevel(addr common.Address, level uint64) {
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetSecurityLevel(level)
+	}
 }

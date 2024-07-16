@@ -150,6 +150,7 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
+		statedb.SetSecurityLevel(addr, account.SecurityLevel)
 	}
 	return statedb.Commit(0, false)
 }
@@ -193,11 +194,12 @@ func (ga *GenesisAlloc) flush(db ethdb.Database, triedb *trie.Database, blockhas
 
 // GenesisAccount is an account in the state of the genesis block.
 type GenesisAccount struct {
-	Code       []byte                      `json:"code,omitempty"`
-	Storage    map[common.Hash]common.Hash `json:"storage,omitempty"`
-	Balance    *big.Int                    `json:"balance" gencodec:"required"`
-	Nonce      uint64                      `json:"nonce,omitempty"`
-	PrivateKey []byte                      `json:"secretKey,omitempty"` // for tests
+	Code          []byte                      `json:"code,omitempty"`
+	Storage       map[common.Hash]common.Hash `json:"storage,omitempty"`
+	Balance       *big.Int                    `json:"balance" gencodec:"required"`
+	Nonce         uint64                      `json:"nonce,omitempty"`
+	SecurityLevel uint64                      `json:"securityLevel,omitempty"`
+	PrivateKey    []byte                      `json:"secretKey,omitempty"` // for tests
 }
 
 // field type overrides for gencodec
@@ -216,11 +218,12 @@ type genesisSpecMarshaling struct {
 }
 
 type genesisAccountMarshaling struct {
-	Code       hexutil.Bytes
-	Balance    *math.HexOrDecimal256
-	Nonce      math.HexOrDecimal64
-	Storage    map[storageJSON]storageJSON
-	PrivateKey hexutil.Bytes
+	Code          hexutil.Bytes
+	Balance       *math.HexOrDecimal256
+	Nonce         math.HexOrDecimal64
+	SecurityLevel math.HexOrDecimal64
+	Storage       map[storageJSON]storageJSON
+	PrivateKey    hexutil.Bytes
 }
 
 // storageJSON represents a 256 bit byte array, but allows less than 256 bits when
