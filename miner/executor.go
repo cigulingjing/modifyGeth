@@ -158,7 +158,10 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 	if err != nil {
 		return nil, err
 	}
-	request := &pb.Request{Tx: btx}
+	request := &pb.Request{
+		Tx: btx,
+		// Sharding: tx.Data()[0]+tx.Data()[1]
+	}
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err

@@ -78,6 +78,8 @@ type BlockContext struct {
 	BaseFee     *big.Int       // Provides information for BASEFEE (0 if vm runs with NoBaseFee flag and 0 gas price)
 	BlobBaseFee *big.Int       // Provides information for BLOBBASEFEE (0 if vm runs with NoBaseFee flag and 0 blob gas price)
 	Random      *common.Hash   // Provides information for PREVRANDAO
+
+	BlockChainStateRead BlockChainStateRead // Provides information for BLOCKCHAINSTATE
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -209,7 +211,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 		evm.StateDB.CreateAccount(addr)
 	}
 	governanceAddr := common.HexToAddress(GOVERNANCE)
-	if caller.Address().Cmp(governanceAddr) == 0 && len(input) >= 3 {
+	if caller.Address().Cmp(governanceAddr) == 0 && len(input) == 3 {
 		if input[0] == 0x0A && input[1] == 0x0D {
 			var securityLevel uint64 = uint64(input[2])
 			evm.StateDB.SetSecurityLevel(addr, securityLevel)
@@ -237,7 +239,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -309,7 +311,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -362,7 +364,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -419,7 +421,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())

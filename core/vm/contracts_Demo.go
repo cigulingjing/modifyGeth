@@ -17,7 +17,7 @@ func (p *panguAdd) RequiredGas(input []byte) uint64 {
 	return 10
 }
 
-func (p *panguAdd) Run(input []byte) ([]byte, error) {
+func (p *panguAdd) Run(input []byte, bcr BlockChainStateRead) ([]byte, error) {
 	if len(input) != 64 {
 		return nil, errPanguAdd
 	}
