@@ -301,6 +301,7 @@ func makeExtraData(extra []byte) []byte {
 		log.Warn("Miner extra data exceed limit", "extra", hexutil.Bytes(extra), "limit", params.MaximumExtraDataSize)
 		extra = nil
 	}
+	log.Info(fmt.Sprintf("the extra block data is:%v", extra))
 	return extra
 }
 

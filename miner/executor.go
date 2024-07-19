@@ -104,6 +104,8 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 		txs = append(txs, tx)
 	}
 	fmt.Println("get commited tx", time.Now(), txs.Len())
+	// 分片过滤逻辑
+	
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
 		es.executorPtr.execCh <- &execReq{timestamp: time.Now().Unix(), txs: txs}
@@ -158,6 +160,7 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 	if err != nil {
 		return nil, err
 	}
+	// add Indentifer
 	request := &pb.Request{Tx: btx}
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
@@ -211,7 +214,7 @@ type executor struct {
 	mu       sync.RWMutex   // The lock used to protect the coinbase
 	coinbase common.Address // yeah, baby
 	extra    []byte
-
+	Sharding  []byte
 	// pendingMu    sync.RWMutex
 	// pendingTasks map[common.Hash]*task
 

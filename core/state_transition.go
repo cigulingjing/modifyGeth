@@ -149,6 +149,16 @@ type Message struct {
 	SkipAccountChecks bool
 }
 
+// 交易类型定义
+type TransactionType uint8
+
+const (
+	//EVM 交易类型
+	TX_EVM TransactionType = iota
+	//链外计算类型
+	TX_HARD
+)
+
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
 	msg := &Message{
@@ -165,6 +175,26 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
 	}
+	// msg.Data 处于ABI码状态，没有解码
+	// fmt.Printf("msg.Data: %v\n", msg.Data)
+
+	// input前三个字节，确定transaction类型
+	var txType TransactionType
+	if len(msg.Data)>=3{
+		if  msg.Data[0] == 0x0A && msg.Data[1] == 0x0D {
+		switch msg.Data[2] {
+		case 1:
+			txType = 1
+		default:
+			txType = 0
+		}
+			log.Info(fmt.Sprintf("Transaction type:%v", txType))
+		} else {
+			log.Error("The first two bytes of the input data are not valid")
+		}
+	}
+	
+	
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
