@@ -129,6 +129,17 @@ func toWordSize(size uint64) uint64 {
 
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
+
+// 交易类型定义
+type MessageType uint8
+
+const (
+	//EVM 交易类型
+	TX_EVM MessageType = iota
+	//链外计算类型
+	TX_WASM
+)
+
 type Message struct {
 	To            *common.Address
 	From          common.Address
@@ -142,22 +153,13 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
-
+	//标识Message类型字段
+	Type MessageType
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
 }
-
-// 交易类型定义
-type TransactionType uint8
-
-const (
-	//EVM 交易类型
-	TX_EVM TransactionType = iota
-	//链外计算类型
-	TX_HARD
-)
 
 // TransactionToMessage converts a transaction into a Message.
 func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.Int) (*Message, error) {
@@ -178,22 +180,6 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	// msg.Data 处于ABI码状态，没有解码
 	// fmt.Printf("msg.Data: %v\n", msg.Data)
 
-	// input前三个字节，确定transaction类型
-	var txType TransactionType
-	if len(msg.Data)>=3{
-		if  msg.Data[0] == 0x0A && msg.Data[1] == 0x0D {
-		switch msg.Data[2] {
-		case 1:
-			txType = 1
-		default:
-			txType = 0
-		}
-			log.Info(fmt.Sprintf("Transaction type:%v", txType))
-		} else {
-			log.Error("The first two bytes of the input data are not valid")
-		}
-	}
-	
 	
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {

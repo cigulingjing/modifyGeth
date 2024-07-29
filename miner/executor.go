@@ -105,7 +105,7 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 	}
 	fmt.Println("get commited tx", time.Now(), txs.Len())
 	// 分片过滤逻辑
-	
+
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
 		es.executorPtr.execCh <- &execReq{timestamp: time.Now().Unix(), txs: txs}
@@ -208,13 +208,14 @@ type executor struct {
 	// chainHeadCh  chan core.ChainHeadEvent
 	// chainHeadSub event.Subscription
 
-	newWorkCh chan *newWorkReq // to launch a new batch to consensus
-	execCh    chan *execReq    // received from consensus, and go to execute
+	newWorkCh  chan *newWorkReq // to launch a new batch to consensus
+	execCh     chan *execReq    // received from consensus, and go to execute
+	offChainCh chan bool        //  communicate with WASM
 
 	mu       sync.RWMutex   // The lock used to protect the coinbase
 	coinbase common.Address // yeah, baby
 	extra    []byte
-	Sharding  []byte
+	Sharding []byte
 	// pendingMu    sync.RWMutex
 	// pendingTasks map[common.Hash]*task
 
@@ -266,8 +267,9 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 
 		resubmitIntervalCh: make(chan time.Duration),
 
-		newWorkCh: make(chan *newWorkReq),
-		execCh:    make(chan *execReq),
+		newWorkCh:  make(chan *newWorkReq),
+		execCh:     make(chan *execReq),
+		offChainCh: make(chan bool),
 	}
 
 	// Subscribe events for blockchain
@@ -782,6 +784,26 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 			panic(err)
 		}
 		e.execClient.transferClient.ToTransferCommit(context.Background(), &pb.ToTransferRequest{FromAddress: from.Bytes(), BAddress: tx.To().Bytes(), Amount: int32(tx.Value().Int64())})
+	}
+	// offchain tx executor 
+	// The first three bytes, determine the transaction type, and remove the field that identifies the type
+	data := tx.Data()
+	if len(data) >= 3 {
+		if data[0] == 0x0A && data[1] == 0x0D {
+			fmt.Printf("Transaction type:%v\n", data[2])
+			switch data[2] {
+			case 1:
+				//offchain first request: data contain two section 1.param of offchainCalc and 2.make environment for WASM
+				env.state.OffChainResult = true
+				//remove identifies field
+				go  e.offchainCalc(data[3:])
+			case 2:
+				//offchain seconde request: catch the result of offchainCalc
+				e.offchainResultCatch()
+			}
+		} else {
+			log.Error("The first two bytes of the input data are not valid")
+		}
 	}
 
 	receipt, err := e.applyTransaction(env, tx)
