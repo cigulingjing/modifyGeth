@@ -237,7 +237,6 @@ func (miner *Miner) SetExtra(extra []byte) error {
 	}
 	// miner.worker.setExtra(extra)
 	miner.executor.setExtra(extra)
-	miner.
 	return nil
 }
 
