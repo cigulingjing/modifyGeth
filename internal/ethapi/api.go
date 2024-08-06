@@ -1107,6 +1107,9 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		return nil, err
 	}
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	blockCtx.BlockChainStateRead = b
+	blockCtx.Rpcctx = ctx
+
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}

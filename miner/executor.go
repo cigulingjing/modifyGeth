@@ -730,7 +730,6 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 	var coalescedLogs []*types.Log
 	// fmt.Println("start exec,txs len:", len((txs)))
 	for _, tx := range txs {
-
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)

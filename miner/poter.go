@@ -128,3 +128,5 @@ func (p *poter) VerifyTxs(ctx context.Context, veriRq *pb.VerifyTxRequest) (*pb.
 func (p *poter) CommitTxs(context.Context, *pb.CommitTxsRequest) (*pb.CommitTxsResponse, error) {
 	return nil, nil
 }
+
+// incensentive

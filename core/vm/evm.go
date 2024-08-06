@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 	"sync/atomic"
 
@@ -80,6 +81,7 @@ type BlockContext struct {
 	Random      *common.Hash   // Provides information for PREVRANDAO
 
 	BlockChainStateRead BlockChainStateRead // Provides information for BLOCKCHAINSTATE
+	Rpcctx              context.Context
 }
 
 // TxContext provides the EVM with information about a transaction.
@@ -239,7 +241,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 	}
 
 	if isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -311,7 +313,7 @@ func (evm *EVM) CallCode(caller ContractRef, addr common.Address, input []byte, 
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -364,7 +366,7 @@ func (evm *EVM) DelegateCall(caller ContractRef, addr common.Address, input []by
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
@@ -421,7 +423,7 @@ func (evm *EVM) StaticCall(caller ContractRef, addr common.Address, input []byte
 	}
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context.BlockChainStateRead)
+		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context)
 	} else {
 		// security level check
 		callerSL := evm.StateDB.GetSecurityLevel(caller.Address())
