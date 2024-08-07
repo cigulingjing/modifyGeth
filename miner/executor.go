@@ -785,7 +785,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 		}
 		e.execClient.transferClient.ToTransferCommit(context.Background(), &pb.ToTransferRequest{FromAddress: from.Bytes(), BAddress: tx.To().Bytes(), Amount: int32(tx.Value().Int64())})
 	}
-	// offchain tx executor 
+	// offchain tx executor
 	// The first three bytes, determine the transaction type, and remove the field that identifies the type
 	data := tx.Data()
 	if len(data) >= 3 {
@@ -793,13 +793,13 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 			fmt.Printf("Transaction type:%v\n", data[2])
 			switch data[2] {
 			case 1:
-				//offchain first request: data contain two section 1.param of offchainCalc and 2.make environment for WASM
+				// attention: the env edit must outer of offchainCom,stateDB don't exist in e
 				env.state.OffChainResult = true
-				//remove identifies field
-				go  e.offchainCalc(data[3:])
+				// 1.remove identifies field   2. go routine: push result in to channel
+				go e.offchainCom(data[3:])
 			case 2:
-				//offchain seconde request: catch the result of offchainCalc
-				e.offchainResultCatch()
+				// offchain seconde request: catch the result of offchainCalc from channel
+				e.offchainResultCatch(env)
 			}
 		} else {
 			log.Error("The first two bytes of the input data are not valid")

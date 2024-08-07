@@ -13,15 +13,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-//global variable
-var(
-	e *executor 
+// global variable
+var (
+	e *executor
 	b *testWorkerBackend
 	p *poter
 )
-func init(){
+
+func init() {
 	var (
 		db     = rawdb.NewMemoryDatabase()
 		config = *params.AllCliqueProtocolChanges
@@ -72,19 +74,41 @@ func TestOffchain(t *testing.T) {
 		GasPrice: big.NewInt(params.InitialBaseFee),
 		Data:     dataHeader,
 	})
-
+	// when all of txs in txPool are executed, seal a block
 	errs := b.txPool.Add([]*types.Transaction{txSend, txCommon, txGet}, true, false)
 	fmt.Printf("errs: %v\n", errs)
-	//wait for consense 
-	time.Sleep(30 * time.Second)
-	//catch result from executor environment 
+	// wait for consense
+	time.Sleep(20 * time.Second)
+	// catch result from executor environment
 	state := e.env.state
 	result := state.OffChainResult
-	fmt.Printf("result in executor:%v\n", result)
+	fmt.Printf("result in stateDB:%v\n", result)
+
+	//  txGet2 will be executed in the second block, leading congestion of exuctor
+	txGet2 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
+		ChainID:  b.chain.Config().ChainID,
+		Nonce:    3,
+		To:       &testUserAddress,
+		Value:    big.NewInt(1000),
+		Gas:      30000,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+		Data:     dataHeader,
+	})
+	// test the channel in second block whether is empty
+	errs = b.txPool.Add([]*types.Transaction{txGet2}, true, false)
+	fmt.Printf("errs: %v\n", errs)
+	time.Sleep(20 * time.Second)
 }
 
-// Add attribute @incentive  to block header, test whether affect the system 
-func TestHeaderRlp(t *testing.T){
+func HeaderJsonPrint(header *types.Header) {
+	bs, _ := json.Marshal(header)
+	var out bytes.Buffer
+	json.Indent(&out, bs, "", "\t")
+	fmt.Printf("The json of block: %v\n", out.String())
+}
+
+// Add attribute @incentive  to block header, test whether affect the system
+func TestHeaderRlp(t *testing.T) {
 	e.start()
 	defer e.close()
 	p.start()
@@ -102,12 +126,23 @@ func TestHeaderRlp(t *testing.T){
 
 	errs := b.txPool.Add([]*types.Transaction{tx}, true, false)
 	fmt.Printf("errs: %v\n", errs)
-	// wait for consense 
+	// wait for consense
 	time.Sleep(30 * time.Second)
-	//Print as Json
-	latestBlock:=b.chain.CurrentBlock()
-	bs,_:=json.Marshal(latestBlock)
-	var out bytes.Buffer
-	json.Indent(&out,bs,"","\t")
-	fmt.Printf("latestBlock: %v\n", out.String())
+	// Get the latest Block
+	latestHeader := b.chain.CurrentBlock()
+
+	// test json decode
+	// HeaderJsonPrint(latestHeader)
+
+	// test RLP decode
+	rlpEncodedHeader, err := rlp.EncodeToBytes(latestHeader)
+	if err != nil {
+		t.Fatalf("Failed to RLP encode block header: %v", err)
+	}
+	var decodedHeader types.Header
+	err = rlp.DecodeBytes(rlpEncodedHeader, &decodedHeader)
+	if err != nil {
+		t.Fatalf("Failed to RLP decode block header: %v", err)
+	}
+	HeaderJsonPrint(&decodedHeader)
 }
