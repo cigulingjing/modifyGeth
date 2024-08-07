@@ -54,7 +54,7 @@ type Config struct {
 	GasCeil   uint64         // Target gas ceiling for mined blocks.
 	GasPrice  *big.Int       // Minimum gas price for mining a transaction
 	Recommit  time.Duration  // The time interval for miner to re-create mining work.
-
+	Sharding  []byte
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
 }
 
@@ -62,7 +62,8 @@ type Config struct {
 var DefaultConfig = Config{
 	GasCeil:  30000000,
 	GasPrice: big.NewInt(params.GWei),
-
+	ExtraData: hexutil.Bytes("123456"),
+	Sharding:  []byte("123456"),
 	// The default recommit time is chosen as two seconds since
 	// consensus-layer usually will wait a half slot of time(6s)
 	// for payload generation. It should be enough for Geth to

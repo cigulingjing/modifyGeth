@@ -103,7 +103,9 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 		}
 		txs = append(txs, tx)
 	}
+
 	log.Info("get commited tx from consensus", "txs len:", txs.Len())
+
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
 		es.executorPtr.execCh <- &execReq{timestamp: time.Now().Unix(), txs: txs}
@@ -158,10 +160,15 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// add Indentifer
+	request := &pb.Request{Tx: btx}
+
 	request := &pb.Request{
 		Tx: btx,
 		// Sharding: tx.Data()[0]+tx.Data()[1]
 	}
+
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -208,13 +215,14 @@ type executor struct {
 	// chainHeadCh  chan core.ChainHeadEvent
 	// chainHeadSub event.Subscription
 
-	newWorkCh chan *newWorkReq // to launch a new batch to consensus
-	execCh    chan *execReq    // received from consensus, and go to execute
+	newWorkCh  chan *newWorkReq // to launch a new batch to consensus
+	execCh     chan *execReq    // received from consensus, and go to execute
+	offChainCh chan bool        //  communicate with WASM
 
 	mu       sync.RWMutex   // The lock used to protect the coinbase
 	coinbase common.Address // yeah, baby
 	extra    []byte
-
+	Sharding []byte
 	// pendingMu    sync.RWMutex
 	// pendingTasks map[common.Hash]*task
 
@@ -266,8 +274,9 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 
 		resubmitIntervalCh: make(chan time.Duration),
 
-		newWorkCh: make(chan *newWorkReq),
-		execCh:    make(chan *execReq),
+		newWorkCh:  make(chan *newWorkReq),
+		execCh:     make(chan *execReq),
+		offChainCh: make(chan bool),
 	}
 
 	// Subscribe events for blockchain
@@ -781,6 +790,26 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 			panic(err)
 		}
 		e.execClient.transferClient.ToTransferCommit(context.Background(), &pb.ToTransferRequest{FromAddress: from.Bytes(), BAddress: tx.To().Bytes(), Amount: int32(tx.Value().Int64())})
+	}
+	// offchain tx executor
+	// The first three bytes, determine the transaction type, and remove the field that identifies the type
+	data := tx.Data()
+	if len(data) >= 3 {
+		if data[0] == 0x0A && data[1] == 0x0D {
+			fmt.Printf("Transaction type:%v\n", data[2])
+			switch data[2] {
+			case 1:
+				// attention: the env edit must outer of offchainCom,stateDB don't exist in e
+				env.state.OffChainResult = true
+				// 1.remove identifies field   2. go routine: push result in to channel
+				go e.offchainCom(data[3:])
+			case 2:
+				// offchain seconde request: catch the result of offchainCalc from channel
+				e.offchainResultCatch(env)
+			}
+		} else {
+			log.Error("The first two bytes of the input data are not valid")
+		}
 	}
 
 	receipt, err := e.applyTransaction(env, tx)

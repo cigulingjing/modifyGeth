@@ -129,6 +129,17 @@ func toWordSize(size uint64) uint64 {
 
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
+
+// 交易类型定义
+type MessageType uint8
+
+const (
+	//EVM 交易类型
+	TX_EVM MessageType = iota
+	//链外计算类型
+	TX_WASM
+)
+
 type Message struct {
 	To            *common.Address
 	From          common.Address
@@ -142,7 +153,8 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
-
+	//标识Message类型字段
+	Type MessageType
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
@@ -165,6 +177,10 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
 	}
+	// msg.Data 处于ABI码状态，没有解码
+	// fmt.Printf("msg.Data: %v\n", msg.Data)
+
+	
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
