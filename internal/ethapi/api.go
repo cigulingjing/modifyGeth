@@ -655,6 +655,15 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 	return (*hexutil.Big)(b), state.Error()
 }
 
+func (s *BlockChainAPI) GetSecurityLevel(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return 0, err
+	}
+	b := state.GetSecurityLevel(address)
+	return hexutil.Uint64(b), state.Error()
+}
+
 // Result structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`
@@ -1098,6 +1107,9 @@ func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.S
 		return nil, err
 	}
 	blockCtx := core.NewEVMBlockContext(header, NewChainContext(ctx, b), nil)
+	blockCtx.BlockChainStateRead = b
+	blockCtx.Rpcctx = ctx
+
 	if blockOverrides != nil {
 		blockOverrides.Apply(&blockCtx)
 	}

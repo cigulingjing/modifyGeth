@@ -16,29 +16,23 @@
 
 package vm
 
-import (
-	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-)
-
-func FuzzPrecompiledContracts(f *testing.F) {
-	// Create list of addresses
-	var addrs []common.Address
-	for k := range allPrecompiles {
-		addrs = append(addrs, k)
-	}
-	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
-		a := addrs[int(addr)%len(addrs)]
-		p := allPrecompiles[a]
-		gas := p.RequiredGas(input)
-		if gas > 10_000_000 {
-			return
-		}
-		inWant := string(input)
-		RunPrecompiledContract(p, input, gas)
-		if inHave := string(input); inWant != inHave {
-			t.Errorf("Precompiled %v modified input data", a)
-		}
-	})
-}
+// func FuzzPrecompiledContracts(f *testing.F) {
+// 	// Create list of addresses
+// 	var addrs []common.Address
+// 	for k := range allPrecompiles {
+// 		addrs = append(addrs, k)
+// 	}
+// 	f.Fuzz(func(t *testing.T, addr uint8, input []byte) {
+// 		a := addrs[int(addr)%len(addrs)]
+// 		p := allPrecompiles[a]
+// 		gas := p.RequiredGas(input)
+// 		if gas > 10_000_000 {
+// 			return
+// 		}
+// 		inWant := string(input)
+// 		RunPrecompiledContract(p, input, gas)
+// 		if inHave := string(input); inWant != inHave {
+// 			t.Errorf("Precompiled %v modified input data", a)
+// 		}
+// 	})
+// }

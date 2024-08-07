@@ -103,8 +103,8 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 		}
 		txs = append(txs, tx)
 	}
-	fmt.Println("get commited tx", time.Now(), txs.Len())
-	// 分片过滤逻辑
+
+	log.Info("get commited tx from consensus", "txs len:", txs.Len())
 
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
@@ -147,7 +147,7 @@ type executorClient struct {
 
 // need add a loop routine to sendTx to consensus layer, when execCh has new txs
 func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
-	fmt.Println("send tx", time.Now())
+	log.Info("send tx to consensus")
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -160,8 +160,15 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// add Indentifer
 	request := &pb.Request{Tx: btx}
+
+	request := &pb.Request{
+		Tx: btx,
+		// Sharding: tx.Data()[0]+tx.Data()[1]
+	}
+
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -732,7 +739,6 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 	var coalescedLogs []*types.Log
 	// fmt.Println("start exec,txs len:", len((txs)))
 	for _, tx := range txs {
-
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
@@ -813,7 +819,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
-	fmt.Println("exec tx success")
+	log.Info("exec transaction success")
 	return receipt.Logs, nil
 }
 

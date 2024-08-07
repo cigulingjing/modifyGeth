@@ -114,6 +114,10 @@ type (
 		account *common.Address
 		prev    uint64
 	}
+	securityLevelChange struct {
+		account *common.Address
+		prev    uint64
+	}
 	storageChange struct {
 		account       *common.Address
 		key, prevalue common.Hash
@@ -217,6 +221,14 @@ func (ch nonceChange) revert(s *StateDB) {
 }
 
 func (ch nonceChange) dirtied() *common.Address {
+	return ch.account
+}
+
+func (ch securityLevelChange) revert(s *StateDB) {
+	s.getStateObject(*ch.account).setSecurityLevel(ch.prev)
+}
+
+func (ch securityLevelChange) dirtied() *common.Address {
 	return ch.account
 }
 
