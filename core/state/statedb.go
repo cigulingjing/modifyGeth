@@ -1443,7 +1443,7 @@ func (s *StateDB)CopyOffchainUse() (state *StateDB){
 		OffChainResult:false,
 	}
 	return 
-
+}
 
 // security level
 func (s *StateDB) GetSecurityLevel(addr common.Address) uint64 {
