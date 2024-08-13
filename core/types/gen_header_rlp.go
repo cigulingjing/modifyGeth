@@ -37,6 +37,11 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Extra)
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
+	if obj.Incentive == nil {
+		w.Write(rlp.EmptyString)
+	} else {
+		w.WriteUint256(obj.Incentive)
+	}
 	_tmp1 := obj.BaseFee != nil
 	_tmp2 := obj.WithdrawalsHash != nil
 	_tmp3 := obj.BlobGasUsed != nil

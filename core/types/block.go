@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
@@ -78,7 +79,8 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
-
+	// Incentive store Rewards for block producers(coinbase)
+	Incentive   *uint256.Int         `json:"incentive"`
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
@@ -275,6 +277,9 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 // CopyHeader creates a deep copy of a block header.
 func CopyHeader(h *Header) *Header {
 	cpy := *h
+	if cpy.Incentive = new(uint256.Int); h.Incentive != nil {
+		cpy.Incentive=h.Incentive.Clone()
+	}
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
 	}

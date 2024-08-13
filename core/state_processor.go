@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -87,7 +88,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
+		receipt, err := applyTransaction(msg, p.config, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv,new(uint256.Int))
 		if err != nil {
 			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
@@ -105,7 +106,8 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	return receipts, allLogs, *usedGas, nil
 }
 
-func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM) (*types.Receipt, error) {
+// Add param incentive to deliver coinbase's incentive
+func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, tx *types.Transaction, usedGas *uint64, evm *vm.EVM,incentive *uint256.Int) (*types.Receipt, error) {
 	// Create a new context to be used in the EVM environment.
 	txContext := NewEVMTxContext(msg)
 	evm.Reset(txContext, statedb)
@@ -116,7 +118,11 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	if err != nil {
 		return nil, err
 	}
-
+	// incentive recored 
+	if result.Incentive!=nil{
+		// Modify the memory value that the pointer incentive points to
+		*incentive=*result.Incentive
+	}
 	// Update the state with pending changes.
 	var root []byte
 	if config.IsByzantium(blockNumber) {
@@ -172,7 +178,16 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 
 	txContext := NewEVMTxContext(msg)
 	vmenv := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
-	return applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
+
+	// check header is None
+	if header.Incentive==nil{
+		header.Incentive=new(uint256.Int)
+	}
+	value:=new(uint256.Int)
+	receipt,err2:=applyTransaction(msg, config, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv,value)
+	// accumulate incentive to the header. Attention type of Incentive(point or value)
+	header.Incentive = new(uint256.Int).Add(value,header.Incentive)
+	return receipt,err2
 }
 
 // ProcessBeaconBlockRoot applies the EIP-4788 system call to the beacon block root
