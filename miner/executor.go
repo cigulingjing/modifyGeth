@@ -933,6 +933,10 @@ func (e *executor) writeToChain(env *executor_env) error {
 }
 
 func isTokenTransition(tx *types.Transaction) bool {
+	if tx.Data() == nil || len(tx.Data()) < 3 {
+		return false
+	}
+
 	if tx.Data()[0] == 0x0A && tx.Data()[1] == 0x02 {
 		return true
 	}
