@@ -44,24 +44,25 @@ import (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *txpool.TxPool
+	NetworkId() uint64
 }
 
 // Config is the configuration parameters of mining.
 type Config struct {
-	Etherbase common.Address `toml:",omitempty"` // Public address for block mining rewards
-	ExtraData hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
-	GasFloor  uint64         // Target gas floor for mined blocks.
-	GasCeil   uint64         // Target gas ceiling for mined blocks.
-	GasPrice  *big.Int       // Minimum gas price for mining a transaction
-	Recommit  time.Duration  // The time interval for miner to re-create mining work.
-	Sharding  []byte
+	Etherbase         common.Address `toml:",omitempty"` // Public address for block mining rewards
+	ExtraData         hexutil.Bytes  `toml:",omitempty"` // Block extra data set by the miner
+	GasFloor          uint64         // Target gas floor for mined blocks.
+	GasCeil           uint64         // Target gas ceiling for mined blocks.
+	GasPrice          *big.Int       // Minimum gas price for mining a transaction
+	Recommit          time.Duration  // The time interval for miner to re-create mining work.
+	Sharding          []byte
 	NewPayloadTimeout time.Duration // The maximum time allowance for creating a new payload
 }
 
 // DefaultConfig contains default settings for miner.
 var DefaultConfig = Config{
-	GasCeil:  30000000,
-	GasPrice: big.NewInt(params.GWei),
+	GasCeil:   30000000,
+	GasPrice:  big.NewInt(params.GWei),
 	ExtraData: hexutil.Bytes("123456"),
 	Sharding:  []byte("123456"),
 	// The default recommit time is chosen as two seconds since
@@ -109,6 +110,12 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	}
 	transferClient := pb.NewTransferGRPCClient(conn2)
 
+	conn3, err := grpc.Dial("127.0.0.1:2233", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Println(err)
+	}
+	dciClient := pb.NewDciExectorClient(conn3)
+
 	miner := &Miner{
 		mux:     mux,
 		eth:     eth,
@@ -117,7 +124,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		startCh: make(chan struct{}),
 		stopCh:  make(chan struct{}),
 		// worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		executor: newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient, transferClient),
+		executor: newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient, transferClient, dciClient),
 		poter:    newPoter(eth, potClient),
 	}
 	miner.wg.Add(1)

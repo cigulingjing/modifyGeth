@@ -139,7 +139,7 @@ type StateDB struct {
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
 	// 记录链外计算的结果
-	OffChainResult bool 
+	OffChainResult bool
 }
 
 // New creates a new state from a given trie.
@@ -707,7 +707,7 @@ func (s *StateDB) Copy() *StateDB {
 		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
 		journal:              newJournal(),
 		hasher:               crypto.NewKeccakState(),
-		OffChainResult: s.OffChainResult,
+		OffChainResult:       s.OffChainResult,
 		// In order for the block producer to be able to use and make additions
 		// to the snapshot tree, we need to copy that as well. Otherwise, any
 		// block mined by ourselves will cause gaps in the tree, and force the
@@ -1413,7 +1413,7 @@ func copy2DSet[k comparable](set map[k]map[common.Hash][]byte) map[k]map[common.
 }
 
 // 链外计算专门使用的copy函数 public
-func (s *StateDB)CopyOffchainUse() (state *StateDB){
+func (s *StateDB) CopyOffchainUse() (state *StateDB) {
 	state = &StateDB{
 		db:                   s.db,
 		trie:                 s.db.CopyTrie(s.trie),
@@ -1440,8 +1440,10 @@ func (s *StateDB)CopyOffchainUse() (state *StateDB){
 		snaps: s.snaps,
 		snap:  s.snap,
 		//链外计算字段拷贝
-		OffChainResult:false,
+		OffChainResult: false,
 	}
+	return
+}
 	return 
 }
 

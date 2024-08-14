@@ -21,7 +21,6 @@ const _ = grpc.SupportPackageIsVersion7
 const (
 	PoTExecutor_GetTxs_FullMethodName    = "/pb.PoTExecutor/GetTxs"
 	PoTExecutor_VerifyTxs_FullMethodName = "/pb.PoTExecutor/VerifyTxs"
-	PoTExecutor_CommitTxs_FullMethodName = "/pb.PoTExecutor/CommitTxs"
 )
 
 // PoTExecutorClient is the client API for PoTExecutor service.
@@ -30,7 +29,6 @@ const (
 type PoTExecutorClient interface {
 	GetTxs(ctx context.Context, in *GetTxRequest, opts ...grpc.CallOption) (*GetTxResponse, error)
 	VerifyTxs(ctx context.Context, in *VerifyTxRequest, opts ...grpc.CallOption) (*VerifyTxResponse, error)
-	CommitTxs(ctx context.Context, in *CommitTxsRequest, opts ...grpc.CallOption) (*CommitTxsResponse, error)
 }
 
 type poTExecutorClient struct {
@@ -59,26 +57,15 @@ func (c *poTExecutorClient) VerifyTxs(ctx context.Context, in *VerifyTxRequest, 
 	return out, nil
 }
 
-func (c *poTExecutorClient) CommitTxs(ctx context.Context, in *CommitTxsRequest, opts ...grpc.CallOption) (*CommitTxsResponse, error) {
-	out := new(CommitTxsResponse)
-	err := c.cc.Invoke(ctx, PoTExecutor_CommitTxs_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // PoTExecutorServer is the server API for PoTExecutor service.
-// All implementations must embed UnimplementedPoTExecutorServer
+// All implementations should embed UnimplementedPoTExecutorServer
 // for forward compatibility
 type PoTExecutorServer interface {
 	GetTxs(context.Context, *GetTxRequest) (*GetTxResponse, error)
 	VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error)
-	CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error)
-	mustEmbedUnimplementedPoTExecutorServer()
 }
 
-// UnimplementedPoTExecutorServer must be embedded to have forward compatible implementations.
+// UnimplementedPoTExecutorServer should be embedded to have forward compatible implementations.
 type UnimplementedPoTExecutorServer struct {
 }
 
@@ -88,10 +75,6 @@ func (UnimplementedPoTExecutorServer) GetTxs(context.Context, *GetTxRequest) (*G
 func (UnimplementedPoTExecutorServer) VerifyTxs(context.Context, *VerifyTxRequest) (*VerifyTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VerifyTxs not implemented")
 }
-func (UnimplementedPoTExecutorServer) CommitTxs(context.Context, *CommitTxsRequest) (*CommitTxsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method CommitTxs not implemented")
-}
-func (UnimplementedPoTExecutorServer) mustEmbedUnimplementedPoTExecutorServer() {}
 
 // UnsafePoTExecutorServer may be embedded to opt out of forward compatibility for this service.
 // Use of this interface is not recommended, as added methods to PoTExecutorServer will
@@ -140,24 +123,6 @@ func _PoTExecutor_VerifyTxs_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PoTExecutor_CommitTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CommitTxsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PoTExecutorServer).CommitTxs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PoTExecutor_CommitTxs_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PoTExecutorServer).CommitTxs(ctx, req.(*CommitTxsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // PoTExecutor_ServiceDesc is the grpc.ServiceDesc for PoTExecutor service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -173,9 +138,204 @@ var PoTExecutor_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "VerifyTxs",
 			Handler:    _PoTExecutor_VerifyTxs_Handler,
 		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "pb/pot.proto",
+}
+
+const (
+	DciExector_SendDci_FullMethodName      = "/pb.DciExector/SendDci"
+	DciExector_GetBalance_FullMethodName   = "/pb.DciExector/GetBalance"
+	DciExector_DevastateDci_FullMethodName = "/pb.DciExector/DevastateDci"
+	DciExector_VerifyUTXO_FullMethodName   = "/pb.DciExector/VerifyUTXO"
+)
+
+// DciExectorClient is the client API for DciExector service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type DciExectorClient interface {
+	SendDci(ctx context.Context, in *SendDciRequest, opts ...grpc.CallOption) (*SendDciResponse, error)
+	GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error)
+	DevastateDci(ctx context.Context, in *DevastateDciRequest, opts ...grpc.CallOption) (*DevastateDciResponse, error)
+	VerifyUTXO(ctx context.Context, in *VerifyUTXORequest, opts ...grpc.CallOption) (*VerifyUTXOResponse, error)
+}
+
+type dciExectorClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewDciExectorClient(cc grpc.ClientConnInterface) DciExectorClient {
+	return &dciExectorClient{cc}
+}
+
+func (c *dciExectorClient) SendDci(ctx context.Context, in *SendDciRequest, opts ...grpc.CallOption) (*SendDciResponse, error) {
+	out := new(SendDciResponse)
+	err := c.cc.Invoke(ctx, DciExector_SendDci_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dciExectorClient) GetBalance(ctx context.Context, in *GetBalanceRequest, opts ...grpc.CallOption) (*GetBalanceResponse, error) {
+	out := new(GetBalanceResponse)
+	err := c.cc.Invoke(ctx, DciExector_GetBalance_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dciExectorClient) DevastateDci(ctx context.Context, in *DevastateDciRequest, opts ...grpc.CallOption) (*DevastateDciResponse, error) {
+	out := new(DevastateDciResponse)
+	err := c.cc.Invoke(ctx, DciExector_DevastateDci_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dciExectorClient) VerifyUTXO(ctx context.Context, in *VerifyUTXORequest, opts ...grpc.CallOption) (*VerifyUTXOResponse, error) {
+	out := new(VerifyUTXOResponse)
+	err := c.cc.Invoke(ctx, DciExector_VerifyUTXO_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DciExectorServer is the server API for DciExector service.
+// All implementations should embed UnimplementedDciExectorServer
+// for forward compatibility
+type DciExectorServer interface {
+	SendDci(context.Context, *SendDciRequest) (*SendDciResponse, error)
+	GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error)
+	DevastateDci(context.Context, *DevastateDciRequest) (*DevastateDciResponse, error)
+	VerifyUTXO(context.Context, *VerifyUTXORequest) (*VerifyUTXOResponse, error)
+}
+
+// UnimplementedDciExectorServer should be embedded to have forward compatible implementations.
+type UnimplementedDciExectorServer struct {
+}
+
+func (UnimplementedDciExectorServer) SendDci(context.Context, *SendDciRequest) (*SendDciResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendDci not implemented")
+}
+func (UnimplementedDciExectorServer) GetBalance(context.Context, *GetBalanceRequest) (*GetBalanceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBalance not implemented")
+}
+func (UnimplementedDciExectorServer) DevastateDci(context.Context, *DevastateDciRequest) (*DevastateDciResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DevastateDci not implemented")
+}
+func (UnimplementedDciExectorServer) VerifyUTXO(context.Context, *VerifyUTXORequest) (*VerifyUTXOResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VerifyUTXO not implemented")
+}
+
+// UnsafeDciExectorServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DciExectorServer will
+// result in compilation errors.
+type UnsafeDciExectorServer interface {
+	mustEmbedUnimplementedDciExectorServer()
+}
+
+func RegisterDciExectorServer(s grpc.ServiceRegistrar, srv DciExectorServer) {
+	s.RegisterService(&DciExector_ServiceDesc, srv)
+}
+
+func _DciExector_SendDci_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendDciRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DciExectorServer).SendDci(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DciExector_SendDci_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DciExectorServer).SendDci(ctx, req.(*SendDciRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DciExector_GetBalance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBalanceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DciExectorServer).GetBalance(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DciExector_GetBalance_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DciExectorServer).GetBalance(ctx, req.(*GetBalanceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DciExector_DevastateDci_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DevastateDciRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DciExectorServer).DevastateDci(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DciExector_DevastateDci_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DciExectorServer).DevastateDci(ctx, req.(*DevastateDciRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DciExector_VerifyUTXO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyUTXORequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DciExectorServer).VerifyUTXO(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DciExector_VerifyUTXO_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DciExectorServer).VerifyUTXO(ctx, req.(*VerifyUTXORequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// DciExector_ServiceDesc is the grpc.ServiceDesc for DciExector service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var DciExector_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.DciExector",
+	HandlerType: (*DciExectorServer)(nil),
+	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "CommitTxs",
-			Handler:    _PoTExecutor_CommitTxs_Handler,
+			MethodName: "SendDci",
+			Handler:    _DciExector_SendDci_Handler,
+		},
+		{
+			MethodName: "GetBalance",
+			Handler:    _DciExector_GetBalance_Handler,
+		},
+		{
+			MethodName: "DevastateDci",
+			Handler:    _DciExector_DevastateDci_Handler,
+		},
+		{
+			MethodName: "VerifyUTXO",
+			Handler:    _DciExector_VerifyUTXO_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

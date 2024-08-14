@@ -552,3 +552,7 @@ func (s *Ethereum) Stop() error {
 
 	return nil
 }
+
+func (s *Ethereum) NetworkId() uint64 {
+	return s.networkID
+}

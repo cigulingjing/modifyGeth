@@ -17,7 +17,8 @@ type poter struct {
 	chain *core.BlockChain
 
 	// running atomic.Bool // a functional judge
-	serving atomic.Bool
+	serving   atomic.Bool
+	networkId uint64
 
 	poterClient pb.PoTExecutorClient
 
@@ -30,7 +31,8 @@ func newPoter(eth Backend, cli pb.PoTExecutorClient) *poter {
 		eth:   eth,
 		chain: eth.BlockChain(),
 		// running: atomic.Bool{},
-		serving: atomic.Bool{},
+		serving:   atomic.Bool{},
+		networkId: eth.NetworkId(),
 
 		server: grpc.NewServer(),
 	}
@@ -80,7 +82,12 @@ func (p *poter) GetTxs(ctx context.Context, getTxRq *pb.GetTxRequest) (*pb.GetTx
 
 	for i := getTxRq.GetStartHeight(); i <= p.eth.BlockChain().CurrentHeader().Number.Uint64(); i++ {
 		block := p.eth.BlockChain().GetBlockByNumber(i)
-		header := &pb.ExecuteHeader{Height: block.Header().Number.Uint64()}
+		header := &pb.ExecuteHeader{
+			Height:    block.Header().Number.Uint64(),
+			BlockHash: block.Header().Hash().Bytes(),
+			ChainID:   int64(p.networkId),
+			TxsHash:   block.Header().Root[:],
+		}
 		txs := make([]*pb.ExecutedTx, 0)
 
 		for _, tx := range block.Transactions() {
@@ -125,8 +132,12 @@ func (p *poter) VerifyTxs(ctx context.Context, veriRq *pb.VerifyTxRequest) (*pb.
 
 }
 
-func (p *poter) CommitTxs(context.Context, *pb.CommitTxsRequest) (*pb.CommitTxsResponse, error) {
-	return nil, nil
-}
-
-// incensentive
+// // IncensentiveVerify is a function to verify the incensentive of Each partition
+// func (p *poter) IncensentiveVerify(context.Context, *pb.IncensentiveVerifyRequest) (*pb.IncensentiveVerifyResponse, error) {
+// 	// 传入block Hash 和 txindex ，返回验证结果
+// 	receipts := p.chain.GetReceiptsByHash(common.Hash{})
+// 	if receipts[0].Status == 1 {
+// 		return &pb.IncensentiveVerifyResponse{Flag: true}, nil
+// 	}
+// 	return nil, nil
+// }

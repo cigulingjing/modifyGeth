@@ -172,8 +172,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	if err != nil {
 		return nil, err
 	}
-	var blockContext vm.BlockContext
-	blockContext = NewEVMBlockContext(header, bc, author)
+	blockContext := NewEVMBlockContext(header, bc, author)
 	// Create a new context to be used in the EVM environment
 
 	txContext := NewEVMTxContext(msg)

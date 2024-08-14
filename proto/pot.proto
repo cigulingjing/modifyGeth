@@ -39,9 +39,15 @@ message Header{
   string PeerId = 11;
   bytes Pubkey = 12;
   bytes Txhash = 13;
+//  bytes ExeHash = 14;
+//  bytes Command = 15;
 }
 
-
+message Command {
+  int32 Type = 1;
+  bytes Operation = 2;
+  bytes Proof = 3;
+}
 
 message BlockRequest {
   uint64 Height = 1;
@@ -95,33 +101,54 @@ message TxData {
   bytes TxData = 2;
 }
 
+message DciTx{
+  bytes TxID                  = 1;
+  repeated TxInput TxInput    = 2;
+  repeated TxOutput TxOutput  = 3;
+  int32 ChainID               = 4;
+}
+
+message TxInput{
+  bool  IsCoinbase  = 1;
+  bytes TxID        = 2;
+  int64 Voutput     = 3;
+  bytes Scriptsig   = 4;
+  int64 Value       = 5;
+  bytes Address     = 6;
+  int32 ChainID     = 7;
+}
+
+message TxOutput{
+  bytes Address   = 1;
+  int64 Value     = 2;
+  bool  IsSpent   = 3;
+  bytes ScriptPk  = 4;
+  int32 ChainID   = 5;
+}
 
 
 message RawTxData {
-  bytes   ChainID = 1;
-  uint64  Nonce = 2;
-  bytes   GasPrice = 3;
-  uint64  Gas = 4;
-  bytes   To =5;
-  bytes   Data =6;
-  bytes   Value = 7;
-  bytes   V = 8;
-  bytes   R = 9;
-  bytes   S = 10;
-  bytes   Accesslist = 11;
+  bytes TxID                  = 1;
+  repeated TxInput TxInput    = 2;
+  repeated TxOutput TxOutput  = 3;
+  int32 ChainID               = 4;
 }
 
 message ExecutedTxData{
   uint64  ExecutedHeight = 1;
   bytes   TxHash = 2;
 }
+
 message ExecuteBlock {
   ExecuteHeader Header = 1;
   repeated ExecutedTx Txs= 2;
 }
 
 message ExecuteHeader {
-  uint64 Height = 1;
+  uint64  Height = 1;
+  bytes   BlockHash = 2;
+  int64   ChainID = 3;
+  bytes   TxsHash = 4;
 }
 
 message ExecutedTx{
@@ -133,7 +160,6 @@ message ExecutedTx{
 service PoTExecutor {
   rpc   GetTxs(GetTxRequest) returns (GetTxResponse){}
   rpc   VerifyTxs(VerifyTxRequest) returns (VerifyTxResponse){}
-  rpc   CommitTxs(CommitTxsRequest) returns (CommitTxsResponse){}
 }
 
 message GetTxRequest{
@@ -145,6 +171,8 @@ message GetTxResponse{
   uint64 Start = 1;
   uint64 End = 2;
   repeated ExecuteBlock Blocks = 3;
+  int64 Value = 4;
+  bytes Address = 5;
 }
 
 message VerifyTxRequest{
@@ -156,10 +184,70 @@ message VerifyTxResponse{
   repeated bool flag =2;
 }
 
-message CommitTxsRequest{
-  repeated RawTxData Txs = 1;
+
+
+service DciExector{
+  rpc   SendDci(SendDciRequest)           returns (SendDciResponse)       {}
+  rpc   GetBalance(GetBalanceRequest)     returns (GetBalanceResponse)    {}
+  rpc   DevastateDci(DevastateDciRequest) returns (DevastateDciResponse)  {}
+  rpc   VerifyUTXO(VerifyUTXORequest)     returns (VerifyUTXOResponse)    {}
 }
 
-message CommitTxsResponse{
+message DciReward{
+  bytes Address = 1;
+  int64 Amount = 2;
+  int64 ChainID = 3;
+  DciProof DciProof = 4;
+}
 
+message DciProof {
+  uint64 Height = 1 ;
+  bytes BlockHash = 2;
+  bytes  TxHash = 3;
+}
+
+message SendDciRequest{
+  repeated DciReward DciReward = 1;
+}
+
+message SendDciResponse{
+  bool IsSuccess = 1;
+  uint64 Height = 2;
+}
+
+message GetBalanceRequest{
+  bytes Address = 1;
+  bytes Signature = 2;
+}
+
+message GetBalanceResponse{
+  bytes Address = 1;
+  int64 Balance = 2;
+  repeated TxOutput TxOutputs= 3;
+}
+
+message DevastateDciRequest{
+    int64 Amount = 1;
+    RawTxData Tx = 2;
+}
+
+message DevastateDciResponse{
+  bool flag = 1;
+}
+
+message UTXOProof{
+  uint64  Height  = 1;
+  bytes   TxHash  = 2;
+  bytes   Data    = 3;
+}
+
+message VerifyUTXORequest{
+  bytes From = 1;
+  bytes To = 2;
+  int64 Value = 3;
+  bytes Proof = 4;
+}
+
+message VerifyUTXOResponse{
+  bool flag = 1;
 }

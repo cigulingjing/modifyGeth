@@ -21,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/proto/pb"
+	"github.com/holiman/uint256"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -69,8 +70,6 @@ type execReq struct {
 }
 
 type executorServer struct {
-	// running atomic.Bool // a functional judge
-
 	executorPtr                    *executor
 	pb.UnimplementedExecutorServer // indicated executor can be a grpc server
 }
@@ -143,10 +142,12 @@ type executorClient struct {
 	consensusClient pb.P2PClient // to send txs to consensus layer
 
 	transferClient pb.TransferGRPCClient
+
+	dciClient pb.DciExectorClient
 }
 
 // need add a loop routine to sendTx to consensus layer, when execCh has new txs
-func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
+func (ec *executorClient) sendTx(tx *types.Transaction, nid uint64) (*pb.Empty, error) {
 	log.Info("send tx to consensus")
 	data, err := tx.MarshalBinary()
 	if err != nil {
@@ -164,10 +165,12 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 	// add Indentifer
 	request := &pb.Request{Tx: btx}
 
-	request := &pb.Request{
-		Tx: btx,
-		// Sharding: tx.Data()[0]+tx.Data()[1]
-	}
+	// TODO：在发送交易时加上执行节点的分区标识networkid
+	// sharding := uint256.NewInt(nid).Bytes()
+	// request := &pb.Request{
+	// 	Tx: btx,
+	// 	Sharding: sharding,
+	// }
 
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
@@ -184,6 +187,21 @@ func (ec *executorClient) sendTx(tx *types.Transaction) (*pb.Empty, error) {
 		return nil, err
 	}
 	return &pb.Empty{}, nil
+
+}
+
+func (ec *executorClient) verifyTokenTransitionTx(tx *types.Transaction) (bool, error) {
+	request := &pb.VerifyUTXORequest{
+		From:  nil,
+		To:    tx.To().Bytes(),
+		Value: tx.Value().Int64(),
+		Proof: tx.Data(),
+	}
+	res, err := ec.dciClient.VerifyUTXO(context.Background(), request)
+	if err != nil {
+		return false, err
+	}
+	return res.Flag, nil
 }
 
 //----------------------------------------------------------------------------------------------
@@ -212,24 +230,15 @@ type executor struct {
 
 	// Subscriptions
 	mux *event.TypeMux
-	// chainHeadCh  chan core.ChainHeadEvent
-	// chainHeadSub event.Subscription
 
 	newWorkCh  chan *newWorkReq // to launch a new batch to consensus
 	execCh     chan *execReq    // received from consensus, and go to execute
 	offChainCh chan bool        //  communicate with WASM
 
-	mu       sync.RWMutex   // The lock used to protect the coinbase
-	coinbase common.Address // yeah, baby
-	extra    []byte
-	Sharding []byte
-	// pendingMu    sync.RWMutex
-	// pendingTasks map[common.Hash]*task
-
-	// snapshotMu       sync.RWMutex // The lock used to protect the snapshots below
-	// snapshotBlock    *types.Block
-	// snapshotReceipts types.Receipts
-	// snapshotState    *state.StateDB
+	mu        sync.RWMutex   // The lock used to protect the coinbase
+	coinbase  common.Address // yeah, baby
+	extra     []byte
+	networkId uint64
 
 	// recommit is the time interval to re-create sealing work or to re-build
 	// payload in proof-of-stake stage.
@@ -244,7 +253,7 @@ type executor struct {
 }
 
 // newExecutor creates a new executor.
-func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, consensusCli pb.P2PClient, transferCli pb.TransferGRPCClient) *executor {
+func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool, consensusCli pb.P2PClient, transferCli pb.TransferGRPCClient, dciClient pb.DciExectorClient) *executor {
 	executor := &executor{
 		config:      config,
 		chainConfig: chainConfig,
@@ -263,8 +272,9 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 			MinTip:  config.GasPrice,
 		},
 
-		coinbase: config.Etherbase,
-		extra:    config.ExtraData,
+		coinbase:  config.Etherbase,
+		extra:     config.ExtraData,
+		networkId: eth.NetworkId(),
 		// pendingTasks: make(map[common.Hash]*task),
 
 		// chainHeadCh: make(chan core.ChainHeadEvent, chainHeadChanSize),
@@ -296,6 +306,7 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 	executor.execClient = &executorClient{
 		consensusClient: consensusCli,
 		transferClient:  transferCli,
+		dciClient:       dciClient,
 	}
 
 	// Register the grpc server
@@ -375,6 +386,11 @@ func (e *executor) setExtra(extra []byte) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.extra = extra
+	// transfer extra to networkId
+	nid, err := uint256.FromHex(common.Bytes2Hex(extra))
+	if err != nil {
+		e.networkId = nid.Uint64()
+	}
 }
 
 func (e *executor) setGasCeil(ceil uint64) {
@@ -677,7 +693,7 @@ func (e *executor) sendTransactions(env *executor_env, txs *transactionsByPriceA
 		}
 
 		// sendTx to consensus
-		_, err := e.execClient.sendTx(tx)
+		_, err := e.execClient.sendTx(tx, e.networkId)
 		// fmt.Println("to", tx.To(), "value", tx.Value(), "nonce", tx.Nonce())
 		if err != nil {
 			log.Trace("Failed to send transaction", "hash", ltx.Hash, "err", err)
@@ -791,6 +807,22 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 		}
 		e.execClient.transferClient.ToTransferCommit(context.Background(), &pb.ToTransferRequest{FromAddress: from.Bytes(), BAddress: tx.To().Bytes(), Amount: int32(tx.Value().Int64())})
 	}
+
+	// 检查交易是否是代币转换并调用dciClient校验函数
+	log.Info("check token transition")
+	if isTokenTransition(tx) {
+		log.Info("verify token transition transaction")
+		flag, err := e.execClient.verifyTokenTransitionTx(tx)
+		if err != nil {
+			log.Error("Failed to verify token transition transaction", "err", err)
+			return nil, err
+		}
+		if !flag {
+			log.Error("Failed to verify token transition transaction, flag is false")
+			return nil, errors.New("failed to verify token transition transaction flag is false")
+		}
+	}
+
 	// offchain tx executor
 	// The first three bytes, determine the transaction type, and remove the field that identifies the type
 	data := tx.Data()
@@ -882,72 +914,14 @@ func (e *executor) writeToChain(env *executor_env) error {
 	e.env = env.copy()
 
 	// emit broadcast
-	e.mux.Post(core.NewMinedBlockEvent{Block: block})
+	e.mux.Post(core.NewMinedBlockEvent{Block: block, NetworkID: e.networkId})
 
 	return nil
 }
 
-// // commitWork generates several new sealing tasks based on the parent block
-// // and submit them to the sealer.
-// func (e *executor) commitWork(interrupt *atomic.Int32, timestamp int64) {
-// 	// Abort committing if node is still syncing
-// 	if e.syncing.Load() {
-// 		return
-// 	}
-// 	start := time.Now()
-
-// 	// Set the coinbase if the worker is running or it's required
-// 	var coinbase common.Address
-// 	if e.isRunning() {
-// 		coinbase = e.etherbase()
-// 		if coinbase == (common.Address{}) {
-// 			log.Error("Refusing to mine without etherbase")
-// 			return
-// 		}
-// 	}
-// 	work, err := e.prepareWork(&generateParams{
-// 		timestamp: uint64(timestamp),
-// 		coinbase:  coinbase,
-// 	})
-// 	if err != nil {
-// 		return
-// 	}
-// 	// Fill pending transactions from the txpool into the block.
-// 	err = e.fillTransactions(interrupt, work)
-// 	switch {
-// 	case err == nil:
-// 		// The entire block is filled, decrease resubmit interval in case
-// 		// of current interval is larger than the user-specified one.
-// 		e.adjustResubmitInterval(&intervalAdjust{inc: false})
-
-// 	case errors.Is(err, errBlockInterruptedByRecommit):
-// 		// Notify resubmit loop to increase resubmitting interval if the
-// 		// interruption is due to frequent commits.
-// 		gaslimit := work.header.GasLimit
-// 		ratio := float64(gaslimit-work.gasPool.Gas()) / float64(gaslimit)
-// 		if ratio < 0.1 {
-// 			ratio = 0.1
-// 		}
-// 		e.adjustResubmitInterval(&intervalAdjust{
-// 			ratio: ratio,
-// 			inc:   true,
-// 		})
-
-// 	case errors.Is(err, errBlockInterruptedByNewHead):
-// 		// If the block building is interrupted by newhead event, discard it
-// 		// totally. Committing the interrupted block introduces unnecessary
-// 		// delay, and possibly causes miner to mine on the previous head,
-// 		// which could result in higher uncle rate.
-// 		work.discard()
-// 		return
-// 	}
-// 	// Submit the generated block for consensus sealing.
-// 	e.commit(work.copy(), e.fullTaskHook, true, start)
-
-// 	// Swap out the old work with the new one, terminating any leftover
-// 	// prefetcher processes in the mean time and starting a new one.
-// 	if e.current != nil {
-// 		e.current.discard()
-// 	}
-// 	e.current = work
-// }
+func isTokenTransition(tx *types.Transaction) bool {
+	if tx.Data()[0] == 0x0A && tx.Data()[1] == 0x02 {
+		return true
+	}
+	return false
+}

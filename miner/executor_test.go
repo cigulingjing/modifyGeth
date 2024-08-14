@@ -103,6 +103,7 @@ type testWorkerBackend struct {
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
+func (b *testWorkerBackend) NetworkId() uint64            { return 1 }
 
 func (b *testWorkerBackend) newTx(nonce uint64) *types.Transaction {
 	signer := types.LatestSigner(b.chain.Config())
@@ -182,8 +183,15 @@ func newTestExecutor(chainConfig *params.ChainConfig, engine consensus.Engine, d
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	conn2, err := grpc.Dial("127.0.0.1:2233", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	dciClient := pb.NewDciExectorClient(conn2)
 	transferClient := pb.NewTransferGRPCClient(conn1)
-	e := newExecutor(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, p2pClient, transferClient)
+	e := newExecutor(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false, p2pClient, transferClient, dciClient)
 	e.coinbase = testBankAddress
 	return e, backend
 }

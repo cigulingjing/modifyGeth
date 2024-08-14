@@ -181,7 +181,6 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	// msg.Data 处于ABI码状态，没有解码
 	// fmt.Printf("msg.Data: %v\n", msg.Data)
 
-	
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
 		msg.GasPrice = cmath.BigMin(msg.GasPrice.Add(msg.GasTipCap, baseFee), msg.GasFeeCap)
@@ -399,6 +398,29 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
+	// exec pangu coinbase
+	if isCoinBaseTx(st.msg) {
+		log.Info("Pangu coinbase transaction", "from", st.msg.From.Hex())
+		return &ExecutionResult{
+			UsedGas:     st.gasUsed(),
+			RefundedGas: 0,
+			Err:         nil,
+			ReturnData:  nil,
+		}, nil
+	}
+
+	// 检查已经在上层做了，这里直接加钱
+	if isTokenTransition(st.msg) {
+		log.Info("Token transition transaction", "to", st.msg.To.Hex(), "value", st.msg.Value)
+		st.state.AddBalance(*st.msg.To, uint256.MustFromBig(st.msg.Value))
+		return &ExecutionResult{
+			UsedGas:     st.gasUsed(),
+			RefundedGas: 0,
+			Err:         nil,
+			ReturnData:  nil,
+		}, nil
+	}
+
 	if tracer := st.evm.Config.Tracer; tracer != nil {
 		tracer.CaptureTxStart(st.initialGas)
 		defer func() {
@@ -525,4 +547,19 @@ func (st *StateTransition) gasUsed() uint64 {
 // blobGasUsed returns the amount of blob gas used by the message.
 func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
+}
+
+// isCoinBaseTx checks if the transaction is a pangu coinbase transaction.
+func isCoinBaseTx(msg *Message) bool {
+	if msg.Data[0] == 0x0A && msg.Data[1] == 0x01 {
+		return true
+	}
+	return false
+}
+
+func isTokenTransition(msg *Message) bool {
+	if msg.Data[0] == 0x0A && msg.Data[1] == 0x01 {
+		return true
+	}
+	return false
 }
