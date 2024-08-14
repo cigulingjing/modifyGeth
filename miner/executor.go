@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
@@ -21,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/proto/pb"
-	"github.com/holiman/uint256"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
@@ -81,7 +81,12 @@ type executorServer struct {
 // Receive txs from consensus layer
 func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock) (*pb.Empty, error) {
 	// sharding check
-	sharding := big.NewInt(0).SetBytes(pbBlock.ShardingName).Uint64()
+	sharding, err := hexutil.DecodeUint64(string(pbBlock.ShardingName))
+	if err != nil {
+		log.Warn("get sharding failed", "sharding", pbBlock.ShardingName)
+		return &pb.Empty{}, nil
+	}
+
 	if sharding != es.executorPtr.networkId {
 		// if sharding check failed, return an error
 		log.Warn("get another sharding transactions", "sharding", sharding, "networkId", es.executorPtr.networkId)
@@ -174,7 +179,8 @@ func (ec *executorClient) sendTx(tx *types.Transaction, nid uint64) (*pb.Empty, 
 	// request := &pb.Request{Tx: btx}
 
 	// TODO：在发送交易时加上执行节点的分区标识networkid
-	sharding := uint256.NewInt(nid).Bytes()
+	sharding := []byte(hexutil.EncodeUint64(nid))
+	log.Info("send tx to consensus", "sharding", sharding)
 	request := &pb.Request{
 		Tx:       btx,
 		Sharding: sharding,
@@ -346,7 +352,6 @@ func (e *executor) isRunning() bool {
 // start sets the running status as 1 and triggers new work submitting.
 func (e *executor) start() {
 	e.running.Store(true)
-
 	if !e.serving.Load() {
 		// !!! 这一段应该进入配置文件
 		listen, err := net.Listen("tcp", "127.0.0.1:9876") // will be included in config
