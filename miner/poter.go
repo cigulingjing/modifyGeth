@@ -75,10 +75,13 @@ func (p *poter) close() {
 func (p *poter) GetTxs(ctx context.Context, getTxRq *pb.GetTxRequest) (*pb.GetTxResponse, error) {
 	// get the transaction from the txpool
 	res := &pb.GetTxResponse{
-		Start:  getTxRq.GetStartHeight(),
-		End:    p.eth.BlockChain().CurrentHeader().Number.Uint64(),
-		Blocks: make([]*pb.ExecuteBlock, 0),
+		Start:   getTxRq.GetStartHeight(),
+		End:     p.eth.BlockChain().CurrentHeader().Number.Uint64(),
+		Blocks:  make([]*pb.ExecuteBlock, 0),
+		Address: p.eth.BlockChain().CurrentHeader().Coinbase.Bytes(),
 	}
+
+	var coinbaseValue int64
 
 	for i := getTxRq.GetStartHeight(); i <= p.eth.BlockChain().CurrentHeader().Number.Uint64(); i++ {
 		block := p.eth.BlockChain().GetBlockByNumber(i)
@@ -88,6 +91,9 @@ func (p *poter) GetTxs(ctx context.Context, getTxRq *pb.GetTxRequest) (*pb.GetTx
 			ChainID:   int64(p.networkId),
 			TxsHash:   block.Header().Root[:],
 		}
+
+		coinbaseValue += block.Header().Incentive.ToBig().Int64()
+
 		txs := make([]*pb.ExecutedTx, 0)
 
 		for _, tx := range block.Transactions() {
@@ -103,6 +109,8 @@ func (p *poter) GetTxs(ctx context.Context, getTxRq *pb.GetTxRequest) (*pb.GetTx
 			Txs:    txs,
 		})
 	}
+
+	res.Value = coinbaseValue
 
 	return res, nil
 }

@@ -110,7 +110,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	}
 	transferClient := pb.NewTransferGRPCClient(conn2)
 
-	conn3, err := grpc.Dial("127.0.0.1:2233", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn3, err := grpc.Dial("127.0.0.1:9866", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Println(err)
 	}

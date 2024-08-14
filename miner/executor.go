@@ -80,6 +80,14 @@ type executorServer struct {
 
 // Receive txs from consensus layer
 func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock) (*pb.Empty, error) {
+	// sharding check
+	sharding := big.NewInt(0).SetBytes(pbBlock.ShardingName).Uint64()
+	if sharding != es.executorPtr.networkId {
+		// if sharding check failed, return an error
+		log.Warn("get another sharding transactions", "sharding", sharding, "networkId", es.executorPtr.networkId)
+		return &pb.Empty{}, nil
+	}
+
 	pbtxs := pbBlock.GetTxs()
 	if len(pbtxs) == 0 {
 		return &pb.Empty{}, nil
@@ -163,14 +171,14 @@ func (ec *executorClient) sendTx(tx *types.Transaction, nid uint64) (*pb.Empty, 
 	}
 
 	// add Indentifer
-	request := &pb.Request{Tx: btx}
+	// request := &pb.Request{Tx: btx}
 
 	// TODO：在发送交易时加上执行节点的分区标识networkid
-	// sharding := uint256.NewInt(nid).Bytes()
-	// request := &pb.Request{
-	// 	Tx: btx,
-	// 	Sharding: sharding,
-	// }
+	sharding := uint256.NewInt(nid).Bytes()
+	request := &pb.Request{
+		Tx:       btx,
+		Sharding: sharding,
+	}
 
 	rawRequest, err := proto.Marshal(request)
 	if err != nil {
@@ -387,10 +395,10 @@ func (e *executor) setExtra(extra []byte) {
 	defer e.mu.Unlock()
 	e.extra = extra
 	// transfer extra to networkId
-	nid, err := uint256.FromHex(common.Bytes2Hex(extra))
-	if err != nil {
-		e.networkId = nid.Uint64()
-	}
+	// nid, err := uint256.FromHex(common.Bytes2Hex(extra))
+	// if err != nil {
+	// 	e.networkId = nid.Uint64()
+	// }
 }
 
 func (e *executor) setGasCeil(ceil uint64) {
