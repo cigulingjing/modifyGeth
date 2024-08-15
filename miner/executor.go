@@ -937,7 +937,7 @@ func isTokenTransition(tx *types.Transaction) bool {
 		return false
 	}
 
-	if tx.Data()[0] == 0x0A && tx.Data()[1] == 0x02 {
+	if tx.Data()[0] == 0x0D && tx.Data()[1] == 0x02 {
 		return true
 	}
 	return false

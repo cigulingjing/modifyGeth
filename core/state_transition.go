@@ -554,7 +554,7 @@ func isCoinBaseTx(msg *Message) bool {
 	if msg.Data == nil || len(msg.Data) < 3 {
 		return false
 	}
-	if msg.Data[0] == 0x0A && msg.Data[1] == 0x01 {
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x01 {
 		return true
 	}
 	return false
@@ -564,7 +564,7 @@ func isTokenTransition(msg *Message) bool {
 	if msg.Data == nil || len(msg.Data) < 3 {
 		return false
 	}
-	if msg.Data[0] == 0x0A && msg.Data[1] == 0x01 {
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x02 {
 		return true
 	}
 	return false
