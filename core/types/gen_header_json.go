@@ -32,6 +32,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		Extra            hexutil.Bytes   `json:"extraData"        gencodec:"required"`
 		MixDigest        common.Hash     `json:"mixHash"`
 		Nonce            BlockNonce      `json:"nonce"`
+		Tainted          []byte          `json:"tainted"`
+		PowPrice         uint64          `json:"powPrice"`
 		Incentive        *uint256.Int    `json:"incentive"`
 		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash  *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
@@ -56,6 +58,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.Extra = h.Extra
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
+	enc.Tainted = h.Tainted
+	enc.PowPrice = h.PowPrice
 	enc.Incentive = h.Incentive
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
 	enc.WithdrawalsHash = h.WithdrawalsHash
@@ -84,6 +88,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		Extra            *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
 		MixDigest        *common.Hash    `json:"mixHash"`
 		Nonce            *BlockNonce     `json:"nonce"`
+		Tainted          []byte          `json:"tainted"`
+		PowPrice         *uint64         `json:"powPrice"`
 		Incentive        *uint256.Int    `json:"incentive"`
 		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
 		WithdrawalsHash  *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
@@ -151,6 +157,12 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Nonce != nil {
 		h.Nonce = *dec.Nonce
+	}
+	if dec.Tainted != nil {
+		h.Tainted = dec.Tainted
+	}
+	if dec.PowPrice != nil {
+		h.PowPrice = *dec.PowPrice
 	}
 	if dec.Incentive != nil {
 		h.Incentive = dec.Incentive

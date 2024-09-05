@@ -79,8 +79,14 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
+
+	// tainted transactions address flag
+	Tainted []byte `json:"tainted"`
+
+	PowPrice uint64 `json:"powPrice"`
+
 	// Incentive store Rewards for block producers(coinbase)
-	Incentive   *uint256.Int         `json:"incentive"`
+	Incentive *uint256.Int `json:"incentive"`
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
@@ -278,7 +284,7 @@ func NewBlockWithWithdrawals(header *Header, txs []*Transaction, uncles []*Heade
 func CopyHeader(h *Header) *Header {
 	cpy := *h
 	if cpy.Incentive = new(uint256.Int); h.Incentive != nil {
-		cpy.Incentive=h.Incentive.Clone()
+		cpy.Incentive = h.Incentive.Clone()
 	}
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)

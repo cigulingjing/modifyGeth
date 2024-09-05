@@ -37,6 +37,8 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Extra)
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
+	w.WriteBytes(obj.Tainted)
+	w.WriteUint64(obj.PowPrice)
 	if obj.Incentive == nil {
 		w.Write(rlp.EmptyString)
 	} else {
