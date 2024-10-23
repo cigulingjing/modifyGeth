@@ -44,11 +44,12 @@ var (
 
 // Transaction types.
 const (
-	LegacyTxType     = 0x00
-	AccessListTxType = 0x01
-	DynamicFeeTxType = 0x02
-	BlobTxType       = 0x03
-	PowTxType        = 0x04 // New transaction type
+	LegacyTxType        = 0x00
+	AccessListTxType    = 0x01
+	DynamicFeeTxType    = 0x02
+	BlobTxType          = 0x03
+	PowTxType           = 0x04 // New transaction type
+	DynamicCryptoTxType = 0x05
 )
 
 // Transaction is an Ethereum transaction.
@@ -208,6 +209,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(BlobTx)
 	case PowTxType:
 		inner = new(PowTx)
+	case DynamicCryptoTxType:
+		inner = new(DynamicCryptoTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -594,4 +597,18 @@ func (tx *Transaction) HashNonce() uint64 {
 		return powTx.HashNonce
 	}
 	return 0
+}
+
+func (tx *Transaction) SignatureData() []byte {
+	if dynamicCryptoTx, ok := tx.inner.(*DynamicCryptoTx); ok {
+		return dynamicCryptoTx.SignatureData
+	}
+	return []byte{}
+}
+
+func (tx *Transaction) CryptoType() []byte {
+	if dynamicCryptoTx, ok := tx.inner.(*DynamicCryptoTx); ok {
+		return dynamicCryptoTx.CryptoType
+	}
+	return []byte{}
 }

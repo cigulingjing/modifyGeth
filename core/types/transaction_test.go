@@ -647,3 +647,86 @@ func TestPowTx(t *testing.T) {
 		}
 	})
 }
+
+func TestDynamicCryptoTx(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	dynamicCryptoTx := &DynamicCryptoTx{
+		ChainID:       big.NewInt(1),
+		Nonce:         123,
+		GasTipCap:     big.NewInt(1),
+		GasFeeCap:     big.NewInt(200),
+		Gas:           50000,
+		To:            &addr,
+		Value:         big.NewInt(1000),
+		Data:          []byte{},
+		AccessList:    AccessList{},
+		CryptoType:    []byte{1},
+		SignatureData: []byte{222},
+		V:             big.NewInt(0), // Initialize V, R, S
+		R:             big.NewInt(0),
+		S:             big.NewInt(0),
+	}
+
+	t.Run("Encoding and Decoding", func(t *testing.T) {
+		tx := NewTx(dynamicCryptoTx)
+		encodedTx, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("Failed to encode tx: %v", err)
+		}
+
+		var decodedTx Transaction
+		err = rlp.DecodeBytes(encodedTx, &decodedTx)
+		if err != nil {
+			t.Fatalf("Failed to decode tx: %v", err)
+		}
+
+		decodedDynamicCryptoTx, ok := decodedTx.inner.(*DynamicCryptoTx)
+		if !ok {
+			t.Fatalf("Decoded transaction is not a PowTx")
+		}
+
+		if !bytes.Equal(decodedDynamicCryptoTx.SignatureData, dynamicCryptoTx.SignatureData) {
+			t.Errorf("Signature mismatch: got %d, want %d", decodedDynamicCryptoTx.SignatureData, dynamicCryptoTx.SignatureData)
+		}
+
+		if !bytes.Equal(decodedDynamicCryptoTx.CryptoType, dynamicCryptoTx.CryptoType) {
+			t.Errorf("CryptoType mismatch: got %d, want %d", decodedDynamicCryptoTx.CryptoType, dynamicCryptoTx.CryptoType)
+		}
+	})
+
+	t.Run("JSON Marshalling and Unmarshalling", func(t *testing.T) {
+		tx := NewTx(dynamicCryptoTx)
+		signer := NewPanguSignerV1(big.NewInt(1))
+		signedTx, err := SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("Failed to sign tx: %v", err)
+		}
+
+		jsonData, err := json.Marshal(signedTx)
+		if err != nil {
+			t.Fatalf("Failed to marshal tx to JSON: %v", err)
+		}
+
+		var unmarshalledTx Transaction
+		err = json.Unmarshal(jsonData, &unmarshalledTx)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal tx from JSON: %v", err)
+		}
+
+		unmarshalledDynamicCryptoTx, ok := unmarshalledTx.inner.(*DynamicCryptoTx)
+		if !ok {
+			t.Fatalf("Unmarshalled transaction is not a PowTx")
+		}
+
+		if !bytes.Equal(unmarshalledDynamicCryptoTx.SignatureData, dynamicCryptoTx.SignatureData) {
+			t.Errorf("Signature mismatch: got %d, want %d", unmarshalledDynamicCryptoTx.SignatureData, dynamicCryptoTx.SignatureData)
+		}
+
+		if !bytes.Equal(unmarshalledDynamicCryptoTx.CryptoType, dynamicCryptoTx.CryptoType) {
+			t.Errorf("CryptoType mismatch: got %d, want %d", unmarshalledDynamicCryptoTx.CryptoType, dynamicCryptoTx.CryptoType)
+		}
+	})
+
+}

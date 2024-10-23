@@ -649,3 +649,72 @@ func (s panguSigner) Hash(tx *Transaction) common.Hash {
 			tx.HashNonce(),
 		})
 }
+
+type panguSignerV1 struct{ panguSigner }
+
+// NewPanguSigner returns a signer that accepts
+// - POW transactions
+// - EIP-4844 blob transactions
+// - EIP-1559 dynamic fee transactions
+// - EIP-2930 access list transactions,
+// - EIP-155 replay protected transactions, and
+// - legacy Homestead transactions.
+func NewPanguSignerV1(chainId *big.Int) Signer {
+	return panguSignerV1{panguSigner{cancunSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}}}
+}
+
+// TODO:待修改
+func (s panguSignerV1) Sender(tx *Transaction) (common.Address, error) {
+	if tx.Type() != DynamicCryptoTxType {
+		return s.cancunSigner.Sender(tx)
+	}
+	V, R, S := tx.RawSignatureValues()
+	// POW txs are defined to use 0 and 1 as their recovery
+	// id, add 27 to become equivalent to unprotected Homestead signatures.
+	V = new(big.Int).Add(V, big.NewInt(27))
+	if tx.ChainId().Cmp(s.chainId) != 0 {
+		return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
+	}
+	return recoverPlain(s.Hash(tx), R, S, V, true)
+}
+
+func (s panguSignerV1) Equal(s2 Signer) bool {
+	x, ok := s2.(panguSignerV1)
+	return ok && x.chainId.Cmp(s.chainId) == 0
+}
+
+func (s panguSignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	txdata, ok := tx.inner.(*DynamicCryptoTx)
+	if !ok {
+		return s.cancunSigner.SignatureValues(tx, sig)
+	}
+	// Check that chain ID of tx matches the signer. We also accept ID zero here,
+	// because it indicates that the chain ID was not specified in the tx.
+	if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+		return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
+	}
+	R, S, _ = decodeSignature(sig)
+	V = big.NewInt(int64(sig[64]))
+	return R, S, V, nil
+}
+
+// Hash returns the hash to be signed by the sender.
+// It does not uniquely identify the transaction.
+func (s panguSignerV1) Hash(tx *Transaction) common.Hash {
+	if tx.Type() != DynamicCryptoTxType {
+		return s.cancunSigner.Hash(tx)
+	}
+	return prefixedRlpHash(
+		tx.Type(),
+		[]interface{}{
+			s.chainId,
+			tx.Nonce(),
+			tx.GasPrice(),
+			tx.Gas(),
+			tx.To(),
+			tx.Value(),
+			tx.Data(),
+			tx.CryptoType(),
+			tx.SignatureData(),
+		})
+}

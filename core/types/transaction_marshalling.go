@@ -47,6 +47,8 @@ type txJSON struct {
 	S                    *hexutil.Big    `json:"s"`
 	YParity              *hexutil.Uint64 `json:"yParity,omitempty"`
 	HashNonce            *hexutil.Uint64 `json:"hashNonce,omitempty"` // New field for PowTx
+	CryptoType           *hexutil.Bytes  `json:"cryptoType"`          // New field for DynamicCryptoTx
+	SignatureData        *hexutil.Bytes  `json:"signatureData"`       // New field for DynamicCryptoTx
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -158,6 +160,25 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(itx.R)
 		enc.S = (*hexutil.Big)(itx.S)
 		enc.HashNonce = (*hexutil.Uint64)(&itx.HashNonce)
+		yparity := itx.V.Uint64()
+		enc.YParity = (*hexutil.Uint64)(&yparity)
+
+		// New case for DynamicCryptoTx
+	case *DynamicCryptoTx:
+		enc.ChainID = (*hexutil.Big)(itx.ChainID)
+		enc.Nonce = (*hexutil.Uint64)(&itx.Nonce)
+		enc.To = tx.To()
+		enc.Gas = (*hexutil.Uint64)(&itx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(itx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(itx.GasTipCap)
+		enc.Value = (*hexutil.Big)(itx.Value)
+		enc.Input = (*hexutil.Bytes)(&itx.Data)
+		enc.AccessList = &itx.AccessList
+		enc.CryptoType = (*hexutil.Bytes)(&itx.CryptoType)       // New field for CryptoType
+		enc.SignatureData = (*hexutil.Bytes)(&itx.SignatureData) // New field for SignatureData
+		enc.V = (*hexutil.Big)(itx.V)
+		enc.R = (*hexutil.Big)(itx.R)
+		enc.S = (*hexutil.Big)(itx.S)
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
 	}
@@ -468,6 +489,72 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			}
 		}
 
+	case DynamicCryptoTxType: // New case for DynamicCryptoTx
+		var itx DynamicCryptoTx
+		inner = &itx
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		itx.ChainID = (*big.Int)(dec.ChainID)
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.To != nil {
+			itx.To = dec.To
+		}
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' in transaction")
+		}
+		itx.Gas = uint64(*dec.Gas)
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+		}
+		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		itx.Value = (*big.Int)(dec.Value)
+		if dec.Input == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Input
+		if dec.AccessList != nil {
+			itx.AccessList = *dec.AccessList
+		}
+		if dec.CryptoType == nil {
+			return errors.New("missing required field 'cryptoType' in transaction")
+		}
+		itx.CryptoType = *dec.CryptoType
+		if dec.SignatureData == nil {
+			return errors.New("missing required field 'signatureData' in transaction")
+		}
+		itx.SignatureData = *dec.SignatureData
+
+		// signature R
+		if dec.R == nil {
+			return errors.New("missing required field 'r' in transaction")
+		}
+		itx.R = (*big.Int)(dec.R)
+		// signature S
+		if dec.S == nil {
+			return errors.New("missing required field 's' in transaction")
+		}
+		itx.S = (*big.Int)(dec.S)
+		// signature V
+		itx.V, err = dec.yParityValue()
+		if err != nil {
+			return err
+		}
+		if itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0 {
+			if err := sanityCheckSignature(itx.V, itx.R, itx.S, false); err != nil {
+				return err
+			}
+		}
 	default:
 		return ErrTxTypeNotSupported
 	}
