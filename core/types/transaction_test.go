@@ -545,3 +545,105 @@ func TestYParityJSONUnmarshalling(t *testing.T) {
 		}
 	}
 }
+
+func TestPowTx(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	powTx := &PowTx{
+		ChainID:    big.NewInt(1),
+		Nonce:      123,
+		GasTipCap:  big.NewInt(1),
+		GasFeeCap:  big.NewInt(200),
+		Gas:        50000,
+		To:         &addr,
+		Value:      big.NewInt(1000),
+		Data:       []byte{},
+		AccessList: AccessList{},
+		HashNonce:  456,
+		V:          big.NewInt(0), // Initialize V, R, S
+		R:          big.NewInt(0),
+		S:          big.NewInt(0),
+	}
+
+	t.Run("Encoding and Decoding", func(t *testing.T) {
+		tx := NewTx(powTx)
+		encodedTx, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("Failed to encode tx: %v", err)
+		}
+
+		var decodedTx Transaction
+		err = rlp.DecodeBytes(encodedTx, &decodedTx)
+		if err != nil {
+			t.Fatalf("Failed to decode tx: %v", err)
+		}
+
+		decodedPowTx, ok := decodedTx.inner.(*PowTx)
+		if !ok {
+			t.Fatalf("Decoded transaction is not a PowTx")
+		}
+
+		if decodedPowTx.HashNonce != powTx.HashNonce {
+			t.Errorf("HashNonce mismatch: got %d, want %d", decodedPowTx.HashNonce, powTx.HashNonce)
+		}
+	})
+
+	t.Run("JSON Marshalling and Unmarshalling", func(t *testing.T) {
+		tx := NewTx(powTx)
+		signer := NewPanguSigner(big.NewInt(1))
+		signedTx, err := SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("Failed to sign tx: %v", err)
+		}
+
+		jsonData, err := json.Marshal(signedTx)
+		if err != nil {
+			t.Fatalf("Failed to marshal tx to JSON: %v", err)
+		}
+
+		var unmarshalledTx Transaction
+		err = json.Unmarshal(jsonData, &unmarshalledTx)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal tx from JSON: %v", err)
+		}
+
+		unmarshalledPowTx, ok := unmarshalledTx.inner.(*PowTx)
+		if !ok {
+			t.Fatalf("Unmarshalled transaction is not a PowTx")
+		}
+
+		if unmarshalledPowTx.HashNonce != powTx.HashNonce {
+			t.Errorf("HashNonce mismatch: got %d, want %d", unmarshalledPowTx.HashNonce, powTx.HashNonce)
+		}
+	})
+
+	t.Run("VerifyWithDifficulty", func(t *testing.T) {
+		tx := NewTx(powTx)
+		signer := NewPanguSigner(big.NewInt(1))
+		signedTx, err := SignTx(tx, signer, key)
+		if err != nil {
+			t.Fatalf("Failed to sign tx: %v", err)
+		}
+
+		powSignedTx, ok := signedTx.inner.(*PowTx)
+		if !ok {
+			t.Fatalf("Signed transaction is not a PowTx")
+		}
+
+		// Test with a very high difficulty (should fail)
+		highDifficulty := new(big.Int).Lsh(big.NewInt(1), 256)
+		highDifficulty.Sub(highDifficulty, big.NewInt(1))
+		valid, _ := powSignedTx.VerifyWithDifficulty(highDifficulty)
+		if valid {
+			t.Errorf("VerifyWithDifficulty should fail with very high difficulty")
+		}
+
+		// Test with a very low difficulty (should pass)
+		lowDifficulty := big.NewInt(1)
+		valid, _ = powSignedTx.VerifyWithDifficulty(lowDifficulty)
+		if !valid {
+			t.Errorf("VerifyWithDifficulty should pass with very low difficulty")
+		}
+	})
+}

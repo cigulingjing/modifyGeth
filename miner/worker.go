@@ -896,6 +896,12 @@ type generateParams struct {
 	withdrawals types.Withdrawals // List of withdrawals to include in block.
 	beaconRoot  *common.Hash      // The beacon root (cancun field).
 	noTxs       bool              // Flag whether an empty block without any transaction is expected
+
+	isExecution bool
+	// The PoW transaction ratio of the current block
+	// if currentPowRatio < 0, if means we do not refer to this field
+	currentPowRatio float64
+	currentAveGas   uint64
 }
 
 // prepareWork constructs the sealing task according to the given parameters,

@@ -79,14 +79,14 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
+	PoWGas      uint64         `json:"powGas" rlp:"optional"`
+	PowPrice    *big.Int       `json:"powPrice" rlp:"optional"`
 
 	// tainted transactions address flag
-	Tainted []byte `json:"tainted"`
-
-	PowPrice uint64 `json:"powPrice"`
+	Tainted []byte `json:"tainted" rlp:"optional"`
 
 	// Incentive store Rewards for block producers(coinbase)
-	Incentive *uint256.Int `json:"incentive"`
+	Incentive *uint256.Int `json:"incentive" rlp:"optional"`
 	// BaseFee was added by EIP-1559 and is ignored in legacy headers.
 	BaseFee *big.Int `json:"baseFeePerGas" rlp:"optional"`
 
@@ -115,6 +115,8 @@ type headerMarshaling struct {
 	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 	BlobGasUsed   *hexutil.Uint64
 	ExcessBlobGas *hexutil.Uint64
+	PoWGas        hexutil.Uint64 // Add this line
+	PowPrice      *hexutil.Big   // Add this line
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its

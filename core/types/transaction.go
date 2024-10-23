@@ -48,6 +48,7 @@ const (
 	AccessListTxType = 0x01
 	DynamicFeeTxType = 0x02
 	BlobTxType       = 0x03
+	PowTxType        = 0x04 // New transaction type
 )
 
 // Transaction is an Ethereum transaction.
@@ -205,6 +206,8 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		inner = new(DynamicFeeTx)
 	case BlobTxType:
 		inner = new(BlobTx)
+	case PowTxType:
+		inner = new(PowTx)
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -583,4 +586,12 @@ func copyAddressPtr(a *common.Address) *common.Address {
 	}
 	cpy := *a
 	return &cpy
+}
+
+// HashNonce returns the hash nonce of the transaction for PowTx, 0 otherwise.
+func (tx *Transaction) HashNonce() uint64 {
+	if powTx, ok := tx.inner.(*PowTx); ok {
+		return powTx.HashNonce
+	}
+	return 0
 }

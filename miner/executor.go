@@ -264,6 +264,9 @@ type executor struct {
 	// server to consensus layer
 	server *grpc.Server // server pointer to the running server
 
+	difficultyAdaptor *DifficultyAdaptor
+	priceAdaptor      *PriceAdaptor
+	gasAdaptor        *GasAdaptor
 }
 
 // newExecutor creates a new executor.
@@ -301,6 +304,11 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 		newWorkCh:  make(chan *newWorkReq),
 		execCh:     make(chan *execReq),
 		offChainCh: make(chan bool),
+
+		// TODO: 添加调整器
+		// difficultyAdaptor: NewDifficultyAdaptor(0.5, 0.5, 0.1, 10.0, big.NewInt(1), 0.0),
+		// priceAdaptor: NewPriceAdaptor(0.5, 0.5, 0.1, 10.0, big.NewInt(1), 0.0),
+		// gasAdaptor: NewGasAdaptor(1000000, 10000000, 1000000, 0.1),
 	}
 
 	// Subscribe events for blockchain
@@ -532,6 +540,17 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		timestamp = parent.Time + 1
 	}
 	// Construct the sealing block header.
+
+	// 其实这一段是想区分一下send的时候prepare work还是execution的时候prepare work
+	newDifficulty := big.NewInt(1)
+	newPoWPrice := big.NewInt(0)
+	newAveGas := uint64(0)
+	if genParams.isExecution {
+		newDifficulty = e.difficultyAdaptor.AdjustDifficulty(genParams.currentPowRatio)
+		newPoWPrice = e.priceAdaptor.AdjustPrice(genParams.currentPowRatio)
+		newAveGas = e.gasAdaptor.AdjustGas(genParams.currentAveGas)
+	}
+
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
@@ -539,7 +558,9 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 		// ! TODO:just for test
-		Difficulty: big.NewInt(1),
+		Difficulty: newDifficulty,
+		PowPrice:   newPoWPrice,
+		PoWGas:     newAveGas,
 	}
 
 	// Set the extra field.
@@ -744,10 +765,27 @@ func (e *executor) executeNewTxBatch(timestamp int64, txs types.Transactions) {
 			return
 		}
 	}
-
+	// count the currentPowRatio
+	currentPoWRatio := 0.0
+	currentAveGas := uint64(0)
+	count := 0.0
+	totalGas := uint64(0)
+	if len(txs) > 0 {
+		for _, tx := range txs {
+			if tx.Type() == types.PowTxType {
+				count++
+			}
+			totalGas += tx.Gas()
+		}
+		currentPoWRatio = count / float64(len(txs))
+		currentAveGas = totalGas / uint64(len(txs)) // TODO: here we use the estimated gas, not the actual gas value, may be we will refine this later.
+	}
 	work, err := e.prepareWork(&generateParams{
-		timestamp: uint64(timestamp), // ...
-		coinbase:  coinbase,
+		timestamp:       uint64(timestamp), // ...
+		coinbase:        coinbase,
+		currentPowRatio: currentPoWRatio,
+		currentAveGas:   currentAveGas,
+		isExecution:     true,
 	})
 	if err != nil {
 		return
