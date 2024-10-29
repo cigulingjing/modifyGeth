@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -558,9 +559,10 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 		// ! TODO:just for test
-		Difficulty: newDifficulty,
-		PowPrice:   newPoWPrice,
-		PoWGas:     newAveGas,
+		Difficulty:   newDifficulty,
+		PowPrice:     newPoWPrice,
+		PoWGas:       newAveGas,
+		RandomNumber: big.NewInt(rand.New(rand.NewSource(time.Now().UnixNano())).Int63()),
 	}
 
 	// Set the extra field.

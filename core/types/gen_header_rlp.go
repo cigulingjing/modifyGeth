@@ -35,6 +35,15 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteUint64(obj.GasUsed)
 	w.WriteUint64(obj.Time)
 	w.WriteBytes(obj.Extra)
+	if obj.RandomNumber == nil {
+		w.Write(rlp.EmptyString)
+	} else {
+		if obj.RandomNumber.Sign() == -1 {
+			return rlp.ErrNegativeBigInt
+		}
+		w.WriteBigInt(obj.RandomNumber)
+	}
+	w.WriteBytes(obj.RandomRoot[:])
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
 	_tmp1 := obj.PoWGas != 0

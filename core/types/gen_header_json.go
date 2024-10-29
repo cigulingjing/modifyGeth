@@ -19,7 +19,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
 		ParentHash       common.Hash     `json:"parentHash"       gencodec:"required"`
 		UncleHash        common.Hash     `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         common.Address  `json:"miner"`
+		Coinbase         common.Address  `json:"miner"            gencodec:"required"`
 		Root             common.Hash     `json:"stateRoot"        gencodec:"required"`
 		TxHash           common.Hash     `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash      common.Hash     `json:"receiptsRoot"     gencodec:"required"`
@@ -30,6 +30,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasUsed          hexutil.Uint64  `json:"gasUsed"          gencodec:"required"`
 		Time             hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
 		Extra            hexutil.Bytes   `json:"extraData"        gencodec:"required"`
+		RandomNumber     *big.Int        `json:"randomNumber" gencodec:"required"`
+		RandomRoot       common.Hash     `json:"randomRoot" gencodec:"required"`
 		MixDigest        common.Hash     `json:"mixHash"`
 		Nonce            BlockNonce      `json:"nonce"`
 		PoWGas           hexutil.Uint64  `json:"powGas" rlp:"optional"`
@@ -57,6 +59,8 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.GasUsed = hexutil.Uint64(h.GasUsed)
 	enc.Time = hexutil.Uint64(h.Time)
 	enc.Extra = h.Extra
+	enc.RandomNumber = h.RandomNumber
+	enc.RandomRoot = h.RandomRoot
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
 	enc.PoWGas = hexutil.Uint64(h.PoWGas)
@@ -77,7 +81,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
 		ParentHash       *common.Hash    `json:"parentHash"       gencodec:"required"`
 		UncleHash        *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         *common.Address `json:"miner"`
+		Coinbase         *common.Address `json:"miner"            gencodec:"required"`
 		Root             *common.Hash    `json:"stateRoot"        gencodec:"required"`
 		TxHash           *common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash      *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
@@ -88,6 +92,8 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasUsed          *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time             *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra            *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
+		RandomNumber     *big.Int        `json:"randomNumber" gencodec:"required"`
+		RandomRoot       *common.Hash    `json:"randomRoot" gencodec:"required"`
 		MixDigest        *common.Hash    `json:"mixHash"`
 		Nonce            *BlockNonce     `json:"nonce"`
 		PoWGas           *hexutil.Uint64 `json:"powGas" rlp:"optional"`
@@ -112,9 +118,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'sha3Uncles' for Header")
 	}
 	h.UncleHash = *dec.UncleHash
-	if dec.Coinbase != nil {
-		h.Coinbase = *dec.Coinbase
+	if dec.Coinbase == nil {
+		return errors.New("missing required field 'miner' for Header")
 	}
+	h.Coinbase = *dec.Coinbase
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for Header")
 	}
@@ -155,6 +162,14 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'extraData' for Header")
 	}
 	h.Extra = *dec.Extra
+	if dec.RandomNumber == nil {
+		return errors.New("missing required field 'randomNumber' for Header")
+	}
+	h.RandomNumber = dec.RandomNumber
+	if dec.RandomRoot == nil {
+		return errors.New("missing required field 'randomRoot' for Header")
+	}
+	h.RandomRoot = *dec.RandomRoot
 	if dec.MixDigest != nil {
 		h.MixDigest = *dec.MixDigest
 	}
