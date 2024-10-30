@@ -160,6 +160,10 @@ type Message struct {
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
+
+	// if isPow is true, the message is a PoW transaction
+	// TODO: check whether it can use pow as gas.
+	IsPow bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -187,6 +191,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	}
 	var err error
 	msg.From, err = types.Sender(s, tx)
+	// Set IsPow flag if the transaction is a PoW transaction
+	msg.IsPow = tx.Type() == types.PowTxType
 	return msg, err
 }
 

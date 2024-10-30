@@ -81,6 +81,8 @@ type BlockContext struct {
 	Random       *common.Hash   // Provides information for PREVRANDAO
 	RandomNumber *big.Int       // Provides information for RANDOMNUMBER
 
+	// TODO: Add pow_price, pow_gas...
+
 	BlockChainStateRead BlockChainStateRead // Provides information for BLOCKCHAINSTATE
 	Rpcctx              context.Context
 }
