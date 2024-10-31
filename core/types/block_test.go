@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/blocktest"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
 // from bcValidBlockTest.json, "SimpleTx"
@@ -318,28 +319,42 @@ func TestRlpDecodeParentHash(t *testing.T) {
 	}
 }
 
-func TestHeaderRLPEncodeDecodeWithPoWGasAndPowPrice(t *testing.T) {
-	// Create a sample header with PoWGas and PowPrice set
+func TestHeaderRLPEncodeDecodeWithAllFields(t *testing.T) {
+	// Create a sample header with all fields set
 	header := &Header{
-		ParentHash:  common.HexToHash("0x1234567890"),
-		UncleHash:   common.HexToHash("0x0987654321"),
-		Coinbase:    common.HexToAddress("0x1234567890123456789012345678901234567890"),
-		Root:        common.HexToHash("0xabcdef1234567890"),
-		TxHash:      common.HexToHash("0x1234abcdef567890"),
-		ReceiptHash: common.HexToHash("0x90abcdef12345678"),
-		Bloom:       Bloom{},
-		Difficulty:  big.NewInt(1000000),
-		Number:      big.NewInt(1234),
-		GasLimit:    5000000,
-		GasUsed:     3000000,
-		Time:        1622100000,
-		Extra:       []byte("test extra data"),
-		MixDigest:   common.HexToHash("0x1234567890abcdef"),
-		Nonce:       BlockNonce{0x13, 0x37},
-		BaseFee:     big.NewInt(1000),
-		PowGas:      1000000,            // Set PoWGas
-		PowPrice:    big.NewInt(500000), // Set PowPrice
+		ParentHash:          common.HexToHash("0x1234567890"),
+		UncleHash:           common.HexToHash("0x0987654321"),
+		Coinbase:            common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		Root:                common.HexToHash("0xabcdef1234567890"),
+		TxHash:              common.HexToHash("0x1234abcdef567890"),
+		ReceiptHash:         common.HexToHash("0x90abcdef12345678"),
+		Bloom:               Bloom{},
+		Difficulty:          big.NewInt(1000000),
+		Number:              big.NewInt(1234),
+		GasLimit:            5000000,
+		GasUsed:             3000000,
+		Time:                1622100000,
+		Extra:               []byte("test extra data"),
+		RandomNumber:        big.NewInt(987654321),
+		RandomRoot:          common.HexToHash("0xdeadbeef1234567890"),
+		MixDigest:           common.HexToHash("0x1234567890abcdef"),
+		Nonce:               BlockNonce{0x13, 0x37},
+		PowGas:              1000000,
+		PowPrice:            big.NewInt(500000),
+		AvgRatioNumerator:   100,
+		AvgRatioDenominator: 200,
+		AvgGasNumerator:     300,
+		AvgGasDenominator:   400,
+		Tainted:             []byte("tainted data"),
+		Incentive:           uint256.NewInt(123456),
+		BaseFee:             big.NewInt(1000),
+		WithdrawalsHash:     &common.Hash{1, 2, 3},
+		BlobGasUsed:         new(uint64),
+		ExcessBlobGas:       new(uint64),
+		ParentBeaconRoot:    &common.Hash{4, 5, 6},
 	}
+	*header.BlobGasUsed = 123
+	*header.ExcessBlobGas = 456
 
 	// Encode the header
 	encoded, err := rlp.EncodeToBytes(header)
@@ -354,27 +369,41 @@ func TestHeaderRLPEncodeDecodeWithPoWGasAndPowPrice(t *testing.T) {
 		t.Fatalf("Failed to RLP decode header: %v", err)
 	}
 
-	// Check if PoWGas and PowPrice are correctly preserved
-	if decodedHeader.PowGas != header.PowGas {
-		t.Errorf("PoWGas mismatch: got %d, want %d", decodedHeader.PowGas, header.PowGas)
+	// Check all fields are correctly preserved
+	check := func(name string, got, want interface{}) {
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s mismatch: got %v, want %v", name, got, want)
+		}
 	}
 
-	if decodedHeader.PowPrice.Cmp(header.PowPrice) != 0 {
-		t.Errorf("PowPrice mismatch: got %d, want %d", decodedHeader.PowPrice, header.PowPrice)
-	}
-
-	// Check other fields to ensure they're also correctly preserved
-	if decodedHeader.ParentHash != header.ParentHash {
-		t.Errorf("ParentHash mismatch: got %x, want %x", decodedHeader.ParentHash, header.ParentHash)
-	}
-
-	if decodedHeader.Number.Cmp(header.Number) != 0 {
-		t.Errorf("Number mismatch: got %s, want %s", decodedHeader.Number, header.Number)
-	}
-
-	if decodedHeader.GasLimit != header.GasLimit {
-		t.Errorf("GasLimit mismatch: got %d, want %d", decodedHeader.GasLimit, header.GasLimit)
-	}
-
-	// Add more field checks as needed...
+	check("ParentHash", decodedHeader.ParentHash, header.ParentHash)
+	check("UncleHash", decodedHeader.UncleHash, header.UncleHash)
+	check("Coinbase", decodedHeader.Coinbase, header.Coinbase)
+	check("Root", decodedHeader.Root, header.Root)
+	check("TxHash", decodedHeader.TxHash, header.TxHash)
+	check("ReceiptHash", decodedHeader.ReceiptHash, header.ReceiptHash)
+	check("Bloom", decodedHeader.Bloom, header.Bloom)
+	check("Difficulty", decodedHeader.Difficulty, header.Difficulty)
+	check("Number", decodedHeader.Number, header.Number)
+	check("GasLimit", decodedHeader.GasLimit, header.GasLimit)
+	check("GasUsed", decodedHeader.GasUsed, header.GasUsed)
+	check("Time", decodedHeader.Time, header.Time)
+	check("Extra", decodedHeader.Extra, header.Extra)
+	check("RandomNumber", decodedHeader.RandomNumber, header.RandomNumber)
+	check("RandomRoot", decodedHeader.RandomRoot, header.RandomRoot)
+	check("MixDigest", decodedHeader.MixDigest, header.MixDigest)
+	check("Nonce", decodedHeader.Nonce, header.Nonce)
+	check("PowGas", decodedHeader.PowGas, header.PowGas)
+	check("PowPrice", decodedHeader.PowPrice, header.PowPrice)
+	check("AvgRatioNumerator", decodedHeader.AvgRatioNumerator, header.AvgRatioNumerator)
+	check("AvgRatioDenominator", decodedHeader.AvgRatioDenominator, header.AvgRatioDenominator)
+	check("AvgGasNumerator", decodedHeader.AvgGasNumerator, header.AvgGasNumerator)
+	check("AvgGasDenominator", decodedHeader.AvgGasDenominator, header.AvgGasDenominator)
+	check("Tainted", decodedHeader.Tainted, header.Tainted)
+	check("Incentive", decodedHeader.Incentive, header.Incentive)
+	check("BaseFee", decodedHeader.BaseFee, header.BaseFee)
+	check("WithdrawalsHash", decodedHeader.WithdrawalsHash, header.WithdrawalsHash)
+	check("BlobGasUsed", decodedHeader.BlobGasUsed, header.BlobGasUsed)
+	check("ExcessBlobGas", decodedHeader.ExcessBlobGas, header.ExcessBlobGas)
+	check("ParentBeaconRoot", decodedHeader.ParentBeaconRoot, header.ParentBeaconRoot)
 }

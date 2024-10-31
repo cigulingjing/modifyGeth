@@ -111,18 +111,24 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty    *hexutil.Big
-	Number        *hexutil.Big
-	GasLimit      hexutil.Uint64
-	GasUsed       hexutil.Uint64
-	Time          hexutil.Uint64
-	Extra         hexutil.Bytes
-	BaseFee       *hexutil.Big
-	Hash          common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
-	BlobGasUsed   *hexutil.Uint64
-	ExcessBlobGas *hexutil.Uint64
-	PoWGas        hexutil.Uint64 // Add this line
-	PowPrice      *hexutil.Big   // Add this line
+	Difficulty          *hexutil.Big
+	Number              *hexutil.Big
+	GasLimit            hexutil.Uint64
+	GasUsed             hexutil.Uint64
+	Time                hexutil.Uint64
+	Extra               hexutil.Bytes
+	BaseFee             *hexutil.Big
+	Hash                common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	BlobGasUsed         *hexutil.Uint64
+	ExcessBlobGas       *hexutil.Uint64
+	PowGas              hexutil.Uint64 // Add this line
+	PowPrice            *hexutil.Big   // Add this line
+	AvgRatioNumerator   hexutil.Uint64 // Add avg ratio numerator
+	AvgRatioDenominator hexutil.Uint64 // Add avg ratio denominator
+	AvgGasNumerator     hexutil.Uint64 // Add avg gas numerator
+	AvgGasDenominator   hexutil.Uint64 // Add avg gas denominator
+	RandomNumber        *hexutil.Big   // Add random number
+	RandomRoot          common.Hash    // Add random root
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its

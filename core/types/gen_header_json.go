@@ -17,33 +17,37 @@ var _ = (*headerMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (h Header) MarshalJSON() ([]byte, error) {
 	type Header struct {
-		ParentHash       common.Hash     `json:"parentHash"       gencodec:"required"`
-		UncleHash        common.Hash     `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         common.Address  `json:"miner"            gencodec:"required"`
-		Root             common.Hash     `json:"stateRoot"        gencodec:"required"`
-		TxHash           common.Hash     `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash      common.Hash     `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            Bloom           `json:"logsBloom"        gencodec:"required"`
-		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
-		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
-		GasLimit         hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
-		GasUsed          hexutil.Uint64  `json:"gasUsed"          gencodec:"required"`
-		Time             hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
-		Extra            hexutil.Bytes   `json:"extraData"        gencodec:"required"`
-		RandomNumber     *big.Int        `json:"randomNumber" gencodec:"required"`
-		RandomRoot       common.Hash     `json:"randomRoot" gencodec:"required"`
-		MixDigest        common.Hash     `json:"mixHash"`
-		Nonce            BlockNonce      `json:"nonce"`
-		PoWGas           hexutil.Uint64  `json:"powGas" rlp:"optional"`
-		PowPrice         *hexutil.Big    `json:"powPrice" rlp:"optional"`
-		Tainted          []byte          `json:"tainted" rlp:"optional"`
-		Incentive        *uint256.Int    `json:"incentive" rlp:"optional"`
-		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
-		WithdrawalsHash  *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
-		BlobGasUsed      *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
-		ExcessBlobGas    *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
-		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
-		Hash             common.Hash     `json:"hash"`
+		ParentHash          common.Hash     `json:"parentHash"       gencodec:"required"`
+		UncleHash           common.Hash     `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase            common.Address  `json:"miner"            gencodec:"required"`
+		Root                common.Hash     `json:"stateRoot"        gencodec:"required"`
+		TxHash              common.Hash     `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash         common.Hash     `json:"receiptsRoot"     gencodec:"required"`
+		Bloom               Bloom           `json:"logsBloom"        gencodec:"required"`
+		Difficulty          *hexutil.Big    `json:"difficulty"       gencodec:"required"`
+		Number              *hexutil.Big    `json:"number"           gencodec:"required"`
+		GasLimit            hexutil.Uint64  `json:"gasLimit"         gencodec:"required"`
+		GasUsed             hexutil.Uint64  `json:"gasUsed"          gencodec:"required"`
+		Time                hexutil.Uint64  `json:"timestamp"        gencodec:"required"`
+		Extra               hexutil.Bytes   `json:"extraData"        gencodec:"required"`
+		RandomNumber        *hexutil.Big    `json:"randomNumber" gencodec:"required"`
+		RandomRoot          common.Hash     `json:"randomRoot" gencodec:"required"`
+		MixDigest           common.Hash     `json:"mixHash"`
+		Nonce               BlockNonce      `json:"nonce"`
+		PowGas              hexutil.Uint64  `json:"powGas" rlp:"optional"`
+		PowPrice            *hexutil.Big    `json:"powPrice" rlp:"optional"`
+		AvgRatioNumerator   hexutil.Uint64  `json:"avgRatioNumerator" rlp:"optional"`
+		AvgRatioDenominator hexutil.Uint64  `json:"avgRatioDenominator" rlp:"optional"`
+		AvgGasNumerator     hexutil.Uint64  `json:"avgGasNumerator" rlp:"optional"`
+		AvgGasDenominator   hexutil.Uint64  `json:"avgGasDenominator" rlp:"optional"`
+		Tainted             []byte          `json:"tainted" rlp:"optional"`
+		Incentive           *uint256.Int    `json:"incentive" rlp:"optional"`
+		BaseFee             *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		WithdrawalsHash     *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
+		BlobGasUsed         *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
+		ExcessBlobGas       *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot    *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
+		Hash                common.Hash     `json:"hash"`
 	}
 	var enc Header
 	enc.ParentHash = h.ParentHash
@@ -59,12 +63,16 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.GasUsed = hexutil.Uint64(h.GasUsed)
 	enc.Time = hexutil.Uint64(h.Time)
 	enc.Extra = h.Extra
-	enc.RandomNumber = h.RandomNumber
+	enc.RandomNumber = (*hexutil.Big)(h.RandomNumber)
 	enc.RandomRoot = h.RandomRoot
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
-	enc.PoWGas = hexutil.Uint64(h.PowGas)
+	enc.PowGas = hexutil.Uint64(h.PowGas)
 	enc.PowPrice = (*hexutil.Big)(h.PowPrice)
+	enc.AvgRatioNumerator = hexutil.Uint64(h.AvgRatioNumerator)
+	enc.AvgRatioDenominator = hexutil.Uint64(h.AvgRatioDenominator)
+	enc.AvgGasNumerator = hexutil.Uint64(h.AvgGasNumerator)
+	enc.AvgGasDenominator = hexutil.Uint64(h.AvgGasDenominator)
 	enc.Tainted = h.Tainted
 	enc.Incentive = h.Incentive
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
@@ -79,32 +87,36 @@ func (h Header) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (h *Header) UnmarshalJSON(input []byte) error {
 	type Header struct {
-		ParentHash       *common.Hash    `json:"parentHash"       gencodec:"required"`
-		UncleHash        *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
-		Coinbase         *common.Address `json:"miner"            gencodec:"required"`
-		Root             *common.Hash    `json:"stateRoot"        gencodec:"required"`
-		TxHash           *common.Hash    `json:"transactionsRoot" gencodec:"required"`
-		ReceiptHash      *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
-		Bloom            *Bloom          `json:"logsBloom"        gencodec:"required"`
-		Difficulty       *hexutil.Big    `json:"difficulty"       gencodec:"required"`
-		Number           *hexutil.Big    `json:"number"           gencodec:"required"`
-		GasLimit         *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
-		GasUsed          *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
-		Time             *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
-		Extra            *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		RandomNumber     *big.Int        `json:"randomNumber" gencodec:"required"`
-		RandomRoot       *common.Hash    `json:"randomRoot" gencodec:"required"`
-		MixDigest        *common.Hash    `json:"mixHash"`
-		Nonce            *BlockNonce     `json:"nonce"`
-		PoWGas           *hexutil.Uint64 `json:"powGas" rlp:"optional"`
-		PowPrice         *hexutil.Big    `json:"powPrice" rlp:"optional"`
-		Tainted          []byte          `json:"tainted" rlp:"optional"`
-		Incentive        *uint256.Int    `json:"incentive" rlp:"optional"`
-		BaseFee          *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
-		WithdrawalsHash  *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
-		BlobGasUsed      *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
-		ExcessBlobGas    *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
-		ParentBeaconRoot *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
+		ParentHash          *common.Hash    `json:"parentHash"       gencodec:"required"`
+		UncleHash           *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
+		Coinbase            *common.Address `json:"miner"            gencodec:"required"`
+		Root                *common.Hash    `json:"stateRoot"        gencodec:"required"`
+		TxHash              *common.Hash    `json:"transactionsRoot" gencodec:"required"`
+		ReceiptHash         *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
+		Bloom               *Bloom          `json:"logsBloom"        gencodec:"required"`
+		Difficulty          *hexutil.Big    `json:"difficulty"       gencodec:"required"`
+		Number              *hexutil.Big    `json:"number"           gencodec:"required"`
+		GasLimit            *hexutil.Uint64 `json:"gasLimit"         gencodec:"required"`
+		GasUsed             *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
+		Time                *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
+		Extra               *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
+		RandomNumber        *hexutil.Big    `json:"randomNumber" gencodec:"required"`
+		RandomRoot          *common.Hash    `json:"randomRoot" gencodec:"required"`
+		MixDigest           *common.Hash    `json:"mixHash"`
+		Nonce               *BlockNonce     `json:"nonce"`
+		PowGas              *hexutil.Uint64 `json:"powGas" rlp:"optional"`
+		PowPrice            *hexutil.Big    `json:"powPrice" rlp:"optional"`
+		AvgRatioNumerator   *hexutil.Uint64 `json:"avgRatioNumerator" rlp:"optional"`
+		AvgRatioDenominator *hexutil.Uint64 `json:"avgRatioDenominator" rlp:"optional"`
+		AvgGasNumerator     *hexutil.Uint64 `json:"avgGasNumerator" rlp:"optional"`
+		AvgGasDenominator   *hexutil.Uint64 `json:"avgGasDenominator" rlp:"optional"`
+		Tainted             []byte          `json:"tainted" rlp:"optional"`
+		Incentive           *uint256.Int    `json:"incentive" rlp:"optional"`
+		BaseFee             *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
+		WithdrawalsHash     *common.Hash    `json:"withdrawalsRoot" rlp:"optional"`
+		BlobGasUsed         *hexutil.Uint64 `json:"blobGasUsed" rlp:"optional"`
+		ExcessBlobGas       *hexutil.Uint64 `json:"excessBlobGas" rlp:"optional"`
+		ParentBeaconRoot    *common.Hash    `json:"parentBeaconBlockRoot" rlp:"optional"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -165,7 +177,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.RandomNumber == nil {
 		return errors.New("missing required field 'randomNumber' for Header")
 	}
-	h.RandomNumber = dec.RandomNumber
+	h.RandomNumber = (*big.Int)(dec.RandomNumber)
 	if dec.RandomRoot == nil {
 		return errors.New("missing required field 'randomRoot' for Header")
 	}
@@ -176,11 +188,23 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Nonce != nil {
 		h.Nonce = *dec.Nonce
 	}
-	if dec.PoWGas != nil {
-		h.PowGas = uint64(*dec.PoWGas)
+	if dec.PowGas != nil {
+		h.PowGas = uint64(*dec.PowGas)
 	}
 	if dec.PowPrice != nil {
 		h.PowPrice = (*big.Int)(dec.PowPrice)
+	}
+	if dec.AvgRatioNumerator != nil {
+		h.AvgRatioNumerator = uint64(*dec.AvgRatioNumerator)
+	}
+	if dec.AvgRatioDenominator != nil {
+		h.AvgRatioDenominator = uint64(*dec.AvgRatioDenominator)
+	}
+	if dec.AvgGasNumerator != nil {
+		h.AvgGasNumerator = uint64(*dec.AvgGasNumerator)
+	}
+	if dec.AvgGasDenominator != nil {
+		h.AvgGasDenominator = uint64(*dec.AvgGasDenominator)
 	}
 	if dec.Tainted != nil {
 		h.Tainted = dec.Tainted
