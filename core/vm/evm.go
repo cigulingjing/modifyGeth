@@ -82,6 +82,8 @@ type BlockContext struct {
 	RandomNumber *big.Int       // Provides information for RANDOMNUMBER
 
 	// TODO: Add pow_price, pow_gas...
+	PowPrice *big.Int // Provides information for POWPRICE
+	PowGas   uint64   // Provides information for POWGAS
 
 	BlockChainStateRead BlockChainStateRead // Provides information for BLOCKCHAINSTATE
 	Rpcctx              context.Context

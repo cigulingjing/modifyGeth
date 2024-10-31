@@ -572,7 +572,7 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		// ! TODO:just for test
 		Difficulty: newDifficulty,
 		PowPrice:   newPoWPrice,
-		PoWGas:     newGas,
+		PowGas:     newGas,
 		// for next block to calculate EMA
 		AvgGasNumerator:     newGasNumerator,
 		AvgGasDenominator:   newGasDenominator,

@@ -46,7 +46,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.RandomRoot[:])
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
-	_tmp1 := obj.PoWGas != 0
+	_tmp1 := obj.PowGas != 0
 	_tmp2 := obj.PowPrice != nil
 	_tmp3 := len(obj.Tainted) > 0
 	_tmp4 := obj.Incentive != nil
@@ -56,7 +56,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	_tmp8 := obj.ExcessBlobGas != nil
 	_tmp9 := obj.ParentBeaconRoot != nil
 	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
-		w.WriteUint64(obj.PoWGas)
+		w.WriteUint64(obj.PowGas)
 	}
 	if _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 {
 		if obj.PowPrice == nil {

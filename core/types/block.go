@@ -81,7 +81,7 @@ type Header struct {
 	RandomRoot          common.Hash    `json:"randomRoot" gencodec:"required"`
 	MixDigest           common.Hash    `json:"mixHash"`
 	Nonce               BlockNonce     `json:"nonce"`
-	PoWGas              uint64         `json:"powGas" rlp:"optional"`
+	PowGas              uint64         `json:"powGas" rlp:"optional"`
 	PowPrice            *big.Int       `json:"powPrice" rlp:"optional"`
 	AvgRatioNumerator   uint64         `json:"avgRatioNumerator" rlp:"optional"`
 	AvgRatioDenominator uint64         `json:"avgRatioDenominator" rlp:"optional"`

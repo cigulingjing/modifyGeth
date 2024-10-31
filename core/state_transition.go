@@ -257,6 +257,13 @@ func (st *StateTransition) to() common.Address {
 }
 
 func (st *StateTransition) buyGas() error {
+	// For PowTx, we don't buy gas but convert to powgas directly
+	if st.msg.IsPow {
+		// Set gas remaining and initial gas to powgas
+		st.gasRemaining += st.evm.Context.PowGas
+		st.initialGas = st.evm.Context.PowGas
+		return nil
+	}
 	mgval := new(big.Int).SetUint64(st.msg.GasLimit)
 	mgval = mgval.Mul(mgval, st.msg.GasPrice)
 	balanceCheck := new(big.Int).Set(mgval)
@@ -497,6 +504,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
 	}
 	effectiveTip := msg.GasPrice
+	if st.msg.IsPow {
+		effectiveTip = st.evm.Context.PowPrice
+	}
 	if rules.IsLondon {
 		effectiveTip = cmath.BigMin(msg.GasTipCap, new(big.Int).Sub(msg.GasFeeCap, st.evm.Context.BaseFee))
 	}
@@ -535,7 +545,12 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 
 	// Return ETH for remaining gas, exchanged at the original rate.
 	remaining := uint256.NewInt(st.gasRemaining)
-	remaining = remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
+	if st.msg.IsPow {
+		// For PoW tx, use PowPrice instead of GasPrice
+		remaining = remaining.Mul(remaining, uint256.MustFromBig(st.evm.Context.PowPrice))
+	} else {
+		remaining = remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
+	}
 	st.state.AddBalance(st.msg.From, remaining)
 
 	// Also return remaining gas to the block gas counter so it is

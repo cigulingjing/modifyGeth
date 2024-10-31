@@ -129,7 +129,7 @@ func (tx *PowTx) Hash() common.Hash {
 		tx.S,
 	})
 }
-func (tx *PowTx) VerifyWithDifficulty(difficulty *big.Int) (bool, *big.Int) {
+func VerifyTxWithDifficulty(tx *Transaction, difficulty *big.Int) (bool, *big.Int) {
 	hash := tx.Hash()
 	hashInt := new(big.Int).SetBytes(hash[:])
 

@@ -337,7 +337,7 @@ func TestHeaderRLPEncodeDecodeWithPoWGasAndPowPrice(t *testing.T) {
 		MixDigest:   common.HexToHash("0x1234567890abcdef"),
 		Nonce:       BlockNonce{0x13, 0x37},
 		BaseFee:     big.NewInt(1000),
-		PoWGas:      1000000,            // Set PoWGas
+		PowGas:      1000000,            // Set PoWGas
 		PowPrice:    big.NewInt(500000), // Set PowPrice
 	}
 
@@ -355,8 +355,8 @@ func TestHeaderRLPEncodeDecodeWithPoWGasAndPowPrice(t *testing.T) {
 	}
 
 	// Check if PoWGas and PowPrice are correctly preserved
-	if decodedHeader.PoWGas != header.PoWGas {
-		t.Errorf("PoWGas mismatch: got %d, want %d", decodedHeader.PoWGas, header.PoWGas)
+	if decodedHeader.PowGas != header.PowGas {
+		t.Errorf("PoWGas mismatch: got %d, want %d", decodedHeader.PowGas, header.PowGas)
 	}
 
 	if decodedHeader.PowPrice.Cmp(header.PowPrice) != 0 {

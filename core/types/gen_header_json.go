@@ -63,7 +63,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.RandomRoot = h.RandomRoot
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
-	enc.PoWGas = hexutil.Uint64(h.PoWGas)
+	enc.PoWGas = hexutil.Uint64(h.PowGas)
 	enc.PowPrice = (*hexutil.Big)(h.PowPrice)
 	enc.Tainted = h.Tainted
 	enc.Incentive = h.Incentive
@@ -177,7 +177,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		h.Nonce = *dec.Nonce
 	}
 	if dec.PoWGas != nil {
-		h.PoWGas = uint64(*dec.PoWGas)
+		h.PowGas = uint64(*dec.PoWGas)
 	}
 	if dec.PowPrice != nil {
 		h.PowPrice = (*big.Int)(dec.PowPrice)

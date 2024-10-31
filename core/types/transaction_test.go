@@ -634,14 +634,15 @@ func TestPowTx(t *testing.T) {
 		// Test with a very high difficulty (should fail)
 		highDifficulty := new(big.Int).Lsh(big.NewInt(1), 256)
 		highDifficulty.Sub(highDifficulty, big.NewInt(1))
-		valid, _ := powSignedTx.VerifyWithDifficulty(highDifficulty)
+		tx = NewTx(powSignedTx)
+		valid, _ := VerifyTxWithDifficulty(tx, highDifficulty)
 		if valid {
 			t.Errorf("VerifyWithDifficulty should fail with very high difficulty")
 		}
 
 		// Test with a very low difficulty (should pass)
 		lowDifficulty := big.NewInt(1)
-		valid, _ = powSignedTx.VerifyWithDifficulty(lowDifficulty)
+		valid, _ = VerifyTxWithDifficulty(tx, lowDifficulty)
 		if !valid {
 			t.Errorf("VerifyWithDifficulty should pass with very low difficulty")
 		}
