@@ -19,16 +19,19 @@ package core
 import (
 	"fmt"
 
+	"encoding/hex"
 	"math"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+
 	cmath "github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/voucher"
 	"github.com/holiman/uint256"
 )
 
@@ -156,6 +159,11 @@ type Message struct {
 	BlobHashes    []common.Hash
 	//标识Message类型字段
 	Type MessageType
+
+	// Attribute for MultiVoucher
+	tokenName   string
+	FeeCurrency *common.Address
+
 	// When SkipAccountChecks is true, the message nonce is not checked against the
 	// account nonce in state. It also disables checking that the sender is an EOA.
 	// This field will be set to true for operations like RPC eth_call.
@@ -164,6 +172,23 @@ type Message struct {
 	// if isPow is true, the message is a PoW transaction
 	// TODO: check whether it can use pow as gas.
 	IsPow bool
+}
+
+// Parse voucher info from Tx.Data
+func (m *Message) ParseVoucher() {
+	// Data's legitimacy check
+	if len(m.Data) > 23 && m.Data[0] == 0x0A && m.Data[1] == 0x0D && m.Data[2] == 0x03 {
+		// Initial and assign pointer
+		m.FeeCurrency = new(common.Address)
+		*m.FeeCurrency = common.BytesToAddress(m.Data[3:23])
+		tokenNameArray, err := hex.DecodeString(string(m.Data[23:]))
+		if err != nil {
+			fmt.Printf("Err in parse Voucher: %v\n", err)
+		}
+		m.tokenName = string(tokenNameArray)
+		fmt.Printf("Tx use %s to pay Gas,contract address is %s!\n", m.tokenName, m.FeeCurrency)
+	}
+
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -182,8 +207,8 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		BlobHashes:        tx.BlobHashes(),
 		BlobGasFeeCap:     tx.BlobGasFeeCap(),
 	}
-	// msg.Data 处于ABI码状态，没有解码
-	// fmt.Printf("msg.Data: %v\n", msg.Data)
+
+	msg.ParseVoucher()
 
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {
@@ -288,17 +313,40 @@ func (st *StateTransition) buyGas() error {
 	if overflow {
 		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
-	if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-		return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+	var BalanceOfGas uint64
+	// Check account balance enough to pay gas
+	if st.msg.FeeCurrency != nil {
+		// Call Contract
+		BalanceOfMethod := voucher.BalanceOf.Bind(st.msg.FeeCurrency)
+		balance := big.NewInt(0)
+		BalanceOfGas, _ = BalanceOfMethod.Execute(st.evm, &balance, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, st.msg.From)
+		// Legitimacy check
+		if balance.Cmp(balanceCheck) < 0 {
+			fmt.Println("Balance of account is insufficient!")
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg, balance, balanceCheck)
+		} else {
+			fmt.Printf("Call BalanceOf! Using %v unit of gas\n", BalanceOfGas)
+		}
+	} else {
+		if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
+			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+		}
 	}
+
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
-	st.gasRemaining += st.msg.GasLimit
+	// If use voucehr to pay,need pay the gas of call BalanceOf
+	st.gasRemaining += (st.msg.GasLimit - BalanceOfGas)
 
 	st.initialGas = st.msg.GasLimit
 	mgvalU256, _ := uint256.FromBig(mgval)
-	st.state.SubBalance(st.msg.From, mgvalU256)
+	// If ETH is used to pay for Gas fees, the from account needs to be deducted here.
+	// If the payment is made with a non-original token, no payment is made here
+	// But rather, after tx is executed, the remain is calculated for offset and payment is made.
+	if st.msg.FeeCurrency == nil {
+		st.state.SubBalance(st.msg.From, mgvalU256)
+	}
 	return nil
 }
 
@@ -496,13 +544,37 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	var gasRefund uint64
-	if !rules.IsLondon {
-		// Before EIP-3529: refunds were capped to gasUsed / 2
-		gasRefund = st.refundGas(params.RefundQuotient)
+
+	// Voucher pay gas
+	if st.msg.FeeCurrency != nil {
+		// When use no-native tokens, refund = 0
+		gasUsedFee := new(big.Int)
+		gasUsedFee.SetUint64(st.gasUsed())
+		gasUsedFee.Mul(gasUsedFee, st.msg.GasPrice)
+
+		var flag bool
+		UseMethod := voucher.Use.Bind(st.msg.FeeCurrency)
+		// Simulation of execution to calculate the cost of Gas consumed
+		snapShot := st.state.Snapshot()
+		useMethodGas, _ := UseMethod.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee)
+		st.state.RevertToSnapshot(snapShot)
+
+		// Dedections from non-native token account, including the gas of call method use
+		gasUsedFee.Add(gasUsedFee, new(big.Int).SetUint64(useMethodGas))
+		if _, err := UseMethod.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee); err != nil {
+			return nil, err
+		}
 	} else {
-		// After EIP-3529: refunds are capped to gasUsed / 5
-		gasRefund = st.refundGas(params.RefundQuotientEIP3529)
+		// Using Native to pay gas, need to refund gas fee.
+		if !rules.IsLondon {
+			// Before EIP-3529: refunds were capped to gasUsed / 2
+			gasRefund = st.refundGas(params.RefundQuotient)
+		} else {
+			// After EIP-3529: refunds are capped to gasUsed / 5
+			gasRefund = st.refundGas(params.RefundQuotientEIP3529)
+		}
 	}
+
 	effectiveTip := msg.GasPrice
 	if st.msg.IsPow {
 		effectiveTip = st.evm.Context.PowPrice
