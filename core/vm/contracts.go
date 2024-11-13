@@ -98,6 +98,7 @@ var PrecompiledContractsBerlin = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{22}): &panguStore{},
 	common.BytesToAddress([]byte{23}): &panguStoreProve{},
 	common.BytesToAddress([]byte{24}): &panguStoreVerify{},
+	common.BytesToAddress([]byte{25}): &panguRingsigVer{},
 }
 
 // PrecompiledContractsCancun contains the default set of pre-compiled Ethereum
