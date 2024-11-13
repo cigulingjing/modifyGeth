@@ -42,6 +42,42 @@ func NewPoWAdaptor(
 	kiNumerator, kiDenominator uint64,
 	minPrice, maxPrice *big.Int,
 ) *PoWAdaptor {
+	// Check if denominators are zero when numerators are not zero
+	if alphaNumerator != 0 && alphaDenominator == 0 {
+		panic("alphaDenominator cannot be zero when alphaNumerator is not zero")
+	}
+	if targetPowRatioNumerator != 0 && targetPowRatioDenominator == 0 {
+		panic("targetPowRatioDenominator cannot be zero when targetPowRatioNumerator is not zero")
+	}
+	if fMinNumerator != 0 && fMinDenominator == 0 {
+		panic("fMinDenominator cannot be zero when fMinNumerator is not zero")
+	}
+	if fMaxNumerator != 0 && fMaxDenominator == 0 {
+		panic("fMaxDenominator cannot be zero when fMaxNumerator is not zero")
+	}
+	if kpNumerator != 0 && kpDenominator == 0 {
+		panic("kpDenominator cannot be zero when kpNumerator is not zero")
+	}
+	if kiNumerator != 0 && kiDenominator == 0 {
+		panic("kiDenominator cannot be zero when kiNumerator is not zero")
+	}
+
+	if targetPowRatioNumerator > targetPowRatioDenominator {
+		panic("targetPowRatioNumerator must be less than or equal to targetPowRatioDenominator")
+	}
+
+	// Check if prices are valid
+	if minPrice.Sign() < 0 || maxPrice.Sign() < 0 {
+		panic("prices cannot be negative")
+	}
+	if minPrice.Cmp(maxPrice) > 0 {
+		panic("minPrice must be less than or equal to maxPrice")
+	}
+
+	// Check if initial difficulty is valid
+	if initialDifficulty.Sign() <= 0 {
+		panic("initialDifficulty must be positive")
+	}
 	return &PoWAdaptor{
 		targetPowRatioNumerator:   targetPowRatioNumerator,
 		targetPowRatioDenominator: targetPowRatioDenominator,
@@ -68,6 +104,25 @@ func (pa *PoWAdaptor) AdjustParameters(
 	parentAvgRatioNumerator, parentAvgRatioDenominator uint64,
 	parentPrice *big.Int,
 ) (*big.Int, *big.Int, uint64, uint64) {
+	// Check if input ratios are valid
+	if currentPowRatioNumerator != 0 && currentPowRatioDenominator == 0 {
+		panic("currentPowRatioDenominator cannot be zero when currentPowRatioNumerator is not zero")
+	}
+	if currentPowRatioNumerator > currentPowRatioDenominator {
+		panic("currentPowRatioNumerator must be less than or equal to currentPowRatioDenominator")
+	}
+	if parentAvgRatioNumerator != 0 && parentAvgRatioDenominator == 0 {
+		panic("parentAvgRatioDenominator cannot be zero when parentAvgRatioNumerator is not zero")
+	}
+	if parentAvgRatioNumerator > parentAvgRatioDenominator {
+		panic("parentAvgRatioNumerator must be less than or equal to parentAvgRatioDenominator")
+	}
+	if parentPrice == nil {
+		panic("parentPrice cannot be nil")
+	}
+	if parentPrice.Sign() < 0 {
+		panic("parentPrice cannot be negative")
+	}
 	// 计算新的平均比率
 	currentRatio := new(big.Int).Mul(
 		big.NewInt(int64(currentPowRatioNumerator)),
@@ -75,11 +130,14 @@ func (pa *PoWAdaptor) AdjustParameters(
 	)
 	currentRatio.Div(currentRatio, big.NewInt(int64(currentPowRatioDenominator)))
 
-	parentRatio := new(big.Int).Mul(
-		big.NewInt(int64(parentAvgRatioNumerator)),
-		big.NewInt(RATIO_PRECISION),
-	)
-	parentRatio.Div(parentRatio, big.NewInt(int64(parentAvgRatioDenominator)))
+	parentRatio := big.NewInt(0)
+	if parentAvgRatioDenominator != 0 {
+		parentRatio = new(big.Int).Mul(
+			big.NewInt(int64(parentAvgRatioNumerator)),
+			big.NewInt(RATIO_PRECISION),
+		)
+		parentRatio.Div(parentRatio, big.NewInt(int64(parentAvgRatioDenominator)))
+	}
 
 	// 计算新的 EMA
 	newAvgRatio := new(big.Int).Mul(

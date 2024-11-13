@@ -16,6 +16,11 @@ type GasAdaptor struct {
 
 // NewGasAdaptor 创建一个新的 GasAdaptor 实例
 func NewGasAdaptor(minGas, maxGas, initialGas uint64, alphaNumerator, alphaDenominator uint64) *GasAdaptor {
+	// Check if denominator is zero when numerator is not zero
+	if alphaNumerator != 0 && alphaDenominator == 0 {
+		panic("alphaDenominator cannot be zero when alphaNumerator is not zero")
+	}
+
 	return &GasAdaptor{
 		minGas:           minGas,
 		maxGas:           maxGas,
@@ -33,6 +38,17 @@ func (ga *GasAdaptor) AdjustGas(
 	blockGasNumerator, blockGasDenominator uint64,
 	parentEMAGasNumerator, parentEMAGasDenominator uint64,
 ) (newGas uint64, newAvgNumerator uint64, newAvgDenominator uint64) {
+	// Check if denominators are zero when numerators are not zero
+	if blockGasNumerator != 0 && blockGasDenominator == 0 {
+		panic("blockGasDenominator cannot be zero when blockGasNumerator is not zero")
+	}
+	if blockGasNumerator > blockGasDenominator {
+		panic("blockGasNumerator must be less than or equal to blockGasDenominator")
+	}
+	if parentEMAGasNumerator != 0 && parentEMAGasDenominator == 0 {
+		panic("parentEMAGasDenominator cannot be zero when parentEMAGasNumerator is not zero")
+	}
+
 	// 使用整数计算 EMA
 	// newEMA = (alpha * blockGas + (1-alpha) * parentEMA)
 	// = (alphaNumerator * blockGas * PRECISION + (alphaDenominator-alphaNumerator) * parentEMAGas) / alphaDenominator
