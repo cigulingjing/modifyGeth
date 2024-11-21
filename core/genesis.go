@@ -152,7 +152,8 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
-		statedb.SetSecurityLevel(addr, account.SecurityLevel)
+		// default security level is 5
+		statedb.SetSecurityLevel(addr, 5)
 	}
 	return statedb.Commit(0, false)
 }

@@ -33,7 +33,7 @@ type StateAccount struct {
 	Balance       *uint256.Int
 	Root          common.Hash // merkle root of the storage trie
 	CodeHash      []byte
-	SecurityLevel uint64
+	SecurityLevel uint64 // security level range 1-5. 0 means the account is locked
 }
 
 // NewEmptyStateAccount constructs an empty state account.
@@ -42,7 +42,7 @@ func NewEmptyStateAccount() *StateAccount {
 		Balance:       new(uint256.Int),
 		Root:          EmptyRootHash,
 		CodeHash:      EmptyCodeHash.Bytes(),
-		SecurityLevel: 0,
+		SecurityLevel: 1,
 	}
 }
 
