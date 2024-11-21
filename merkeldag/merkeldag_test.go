@@ -2,13 +2,13 @@ package merkeldag
 
 import (
 	"testing"
-
-	"github.com/ethereum/go-ethereum/core/rawdb"
 )
 
 func TestMerkelDAG_Insert(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	dag := NewMerkelDAG(db)
+	dag, err := NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -44,8 +44,10 @@ func TestMerkelDAG_Insert(t *testing.T) {
 }
 
 func TestMerkelDAG_GetCurrentIndex(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	dag := NewMerkelDAG(db)
+	dag, err := NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	// 初始索引应该是0
 	if idx := dag.GetCurrentIndex(); idx != 0 {
@@ -65,8 +67,10 @@ func TestMerkelDAG_GetCurrentIndex(t *testing.T) {
 }
 
 func TestMerkelDAG_SetCurrentIndex(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	dag := NewMerkelDAG(db)
+	dag, err := NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	tests := []struct {
 		name    string
@@ -105,8 +109,10 @@ func TestMerkelDAG_SetCurrentIndex(t *testing.T) {
 }
 
 func TestMerkelDAG_IsEmpty(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	dag := NewMerkelDAG(db)
+	dag, err := NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	// 新创建的DAG应该是空的
 	if !dag.IsEmpty() {

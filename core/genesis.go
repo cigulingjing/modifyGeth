@@ -34,6 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/merkeldag"
+	"github.com/ethereum/go-ethereum/merkeldag/mdagdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -437,6 +439,7 @@ func (g *Genesis) ToBlock() *types.Block {
 	if err != nil {
 		panic(err)
 	}
+
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
@@ -451,6 +454,7 @@ func (g *Genesis) ToBlock() *types.Block {
 		Coinbase:   g.Coinbase,
 		Root:       root,
 	}
+
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}
@@ -513,6 +517,17 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 	if err := g.Alloc.flush(db, triedb, block.Hash()); err != nil {
 		return nil, err
 	}
+	// generate merkel dag
+	mdag, err := merkeldag.NewMerkelDAG()
+	if err != nil {
+		panic(err)
+	}
+	mdag_root := mdag.GetRoot().GetHash()
+	block.Header().Tainted = mdag_root
+
+	mdagdb := mdagdb.NewMerkleDAGDB(db)
+	mdagdb.SaveDAG(mdag)
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)

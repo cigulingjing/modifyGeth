@@ -20,14 +20,18 @@ func NewNode(data []byte) (*Node, error) {
 		return nil, errors.New("data cannot be nil")
 	}
 
-	hash := sha256.Sum256(data)
-	return &Node{
+	node := &Node{
 		data:  data,
-		hash:  hash[:],
 		left:  nil,
 		right: nil,
 		prev:  nil,
-	}, nil
+	}
+
+	// 立即计算初始哈希值
+	hash := sha256.Sum256(data)
+	node.hash = hash[:]
+
+	return node, nil
 }
 
 // calculateHash 计算节点的哈希值
@@ -70,33 +74,19 @@ func (n *Node) updateHash() {
 // InsertNode 在 Merkle 树中插入新节点
 func InsertNode(root *Node, data []byte, index uint64) (*Node, error) {
 	if root == nil {
-		root, _ = NewNode([]byte("root"))
+		root, err := NewNode([]byte("root"))
+		if err != nil {
+			return nil, err
+		}
 		// 初始化完整的空树结构
-		initializeEmptyTree(root, TreeDepth)
+		if err := InitializeEmptyTree(root, TreeDepth); err != nil {
+			return nil, err
+		}
+		// 树已经在 InitializeEmptyTree 中更新了哈希
 	}
 
 	// 插入叶子节点
 	return insertAtIndex(root, data, index)
-}
-
-// initializeEmptyTree 初始化空的树结构
-func initializeEmptyTree(node *Node, depth int) error {
-	if depth == 0 {
-		return nil
-	}
-
-	left, _ := NewNode([]byte("empty"))
-	right, _ := NewNode([]byte("empty"))
-
-	node.left = left
-	node.right = right
-	left.prev = node
-	right.prev = node
-
-	initializeEmptyTree(left, depth-1)
-	initializeEmptyTree(right, depth-1)
-
-	return nil
 }
 
 // insertAtIndex 在指定索引位置插入节点
@@ -113,31 +103,39 @@ func insertAtIndex(root *Node, data []byte, index uint64) (*Node, error) {
 
 	// 找到目标叶子节点的路径
 	current := root
-	for i := TreeDepth - 1; i >= 0; i-- {
+	// 使用固定的8层深度，从最高位开始遍历
+	path := make([]*Node, TreeDepth+1) // +1 包含根节点
+	path[0] = current
+
+	for i := 0; i < TreeDepth; i++ {
 		if current == nil {
 			return nil, errors.New("invalid tree structure")
 		}
 
-		// 使用index的第i位决定走左边还是右边
-		if (index & (1 << uint(i))) == 0 {
+		// 使用index的第(TreeDepth-1-i)位决定走左边还是右边
+		if (index & (1 << uint(TreeDepth-1-i))) == 0 {
 			current = current.left
 		} else {
 			current = current.right
 		}
+		path[i+1] = current
 	}
 
 	// 替换叶子节点
-	if current.prev.left == current {
-		current.prev.left = newNode
+	parent := path[TreeDepth-1]
+	if parent.left == current {
+		parent.left = newNode
 	} else {
-		current.prev.right = newNode
+		parent.right = newNode
 	}
-	newNode.prev = current.prev
+	newNode.prev = parent
 
-	// 更新哈希值
-	newNode.updateHash()
+	// 从叶子节点开始，自底向上更新哈希值
+	for i := TreeDepth - 1; i >= 0; i-- {
+		path[i].updateHash()
+	}
 
-	return GetRoot(newNode), nil
+	return root, nil
 }
 
 // GetRoot 获取树的根节点

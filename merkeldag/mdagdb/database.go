@@ -48,7 +48,7 @@ func (mdb *MerkleDAGDB) SaveDAG(dag *merkeldag.MerkelDAG) error {
 
 	// 保存根节点哈希
 	rootHash := dag.GetRoot().GetHash()
-	if err := mdb.db.Put([]byte("root_hash"), rootHash); err != nil {
+	if err := mdb.db.Put([]byte("mdag_root_hash"), rootHash); err != nil {
 		return fmt.Errorf("failed to save root hash: %v", err)
 	}
 
@@ -117,7 +117,10 @@ func (mdb *MerkleDAGDB) LoadDAG() (*merkeldag.MerkelDAG, error) {
 	}
 
 	// 创建新的 DAG
-	dag := merkeldag.NewMerkelDAG(mdb.db)
+	dag, err := merkeldag.NewMerkelDAG()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new DAG: %v", err)
+	}
 
 	// 如果索引为0，说明是空树
 	if index == 0 {
@@ -125,7 +128,7 @@ func (mdb *MerkleDAGDB) LoadDAG() (*merkeldag.MerkelDAG, error) {
 	}
 
 	// 加载根节点哈希
-	rootHash, err := mdb.db.Get([]byte("root_hash"))
+	rootHash, err := mdb.db.Get([]byte("mdag_root_hash"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load root hash: %v", err)
 	}
@@ -204,12 +207,12 @@ func (mdb *MerkleDAGDB) saveIndex(index uint64) error {
 	if err := gob.NewEncoder(&buf).Encode(index); err != nil {
 		return err
 	}
-	return mdb.db.Put([]byte("current_index"), buf.Bytes())
+	return mdb.db.Put([]byte("mdag_current_index"), buf.Bytes())
 }
 
 // 加载当前索引
 func (mdb *MerkleDAGDB) loadIndex() (uint64, error) {
-	data, err := mdb.db.Get([]byte("current_index"))
+	data, err := mdb.db.Get([]byte("mdag_current_index"))
 	if err != nil {
 		return 0, nil // 如果不存在，返回0
 	}

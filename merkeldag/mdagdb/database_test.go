@@ -9,12 +9,14 @@ import (
 )
 
 func TestMerkleDAGDB_SaveAndLoadDAG(t *testing.T) {
-	// 创建内存数据库
 	memDB := rawdb.NewMemoryDatabase()
 	dagDB := NewMerkleDAGDB(memDB)
 
 	// 创建一个测试 DAG
-	dag := merkeldag.NewMerkelDAG(memDB)
+	dag, err := merkeldag.NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	// 插入一些测试数据
 	testData := [][]byte{
@@ -55,7 +57,10 @@ func TestMerkleDAGDB_SaveAndLoadDAG(t *testing.T) {
 func TestMerkleDAGDB_SaveAndLoadEmptyDAG(t *testing.T) {
 	memDB := rawdb.NewMemoryDatabase()
 	dagDB := NewMerkleDAGDB(memDB)
-	emptyDAG := merkeldag.NewMerkelDAG(memDB)
+	emptyDAG, err := merkeldag.NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create empty DAG: %v", err)
+	}
 
 	// 保存空 DAG
 	if err := dagDB.SaveDAG(emptyDAG); err != nil {
@@ -77,7 +82,10 @@ func TestMerkleDAGDB_SaveAndLoadEmptyDAG(t *testing.T) {
 func TestMerkleDAGDB_CacheOperations(t *testing.T) {
 	memDB := rawdb.NewMemoryDatabase()
 	dagDB := NewMerkleDAGDB(memDB)
-	dag := merkeldag.NewMerkelDAG(memDB)
+	dag, err := merkeldag.NewMerkelDAG()
+	if err != nil {
+		t.Fatalf("Failed to create DAG: %v", err)
+	}
 
 	// 插入测试数据
 	if err := dag.Insert([]byte("test data")); err != nil {

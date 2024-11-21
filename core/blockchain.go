@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/syncx"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/merkeldag/mdagdb"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -220,6 +221,8 @@ type BlockChain struct {
 	stateCache    state.Database                   // State database to reuse between imports (contains state cache)
 	txIndexer     *txIndexer                       // Transaction indexer, might be nil if not enabled
 
+	mdagdb *mdagdb.MerkleDAGDB
+
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
@@ -271,6 +274,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 	// Open trie database with provided config
 	triedb := trie.NewDatabase(db, cacheConfig.triedbConfig())
 
+	mdagdb := mdagdb.NewMerkleDAGDB(db)
 	// Setup the genesis block, commit the provided genesis specification
 	// to database if the genesis block is not present yet, or load the
 	// stored one from database.
@@ -291,6 +295,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		cacheConfig:   cacheConfig,
 		db:            db,
 		triedb:        triedb,
+		mdagdb:        mdagdb,
 		triegc:        prque.New[int64, common.Hash](nil),
 		quit:          make(chan struct{}),
 		chainmu:       syncx.NewClosableMutex(),
