@@ -353,6 +353,16 @@ func (st *StateTransition) buyGas() error {
 func (st *StateTransition) preCheck() error {
 	// Only check transactions that are not fake
 	msg := st.msg
+	// check address is locked?(it means the account sercurity level is 0)
+	fromSL := st.state.GetSecurityLevel(msg.From)
+	if fromSL == 0 {
+		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.From.Hex())
+	}
+	toSL := st.state.GetSecurityLevel(*msg.To)
+	if toSL == 0 {
+		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
+	}
+
 	if !msg.SkipAccountChecks {
 		// Make sure this transaction's nonce is correct.
 		stNonce := st.state.GetNonce(msg.From)
@@ -459,9 +469,21 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, err
 	}
 
-	// exec pangu coinbase
-	if isCoinBaseTx(st.msg) {
-		log.Info("Pangu coinbase transaction", "from", st.msg.From.Hex())
+	// exec pangu coinbase(not used now)
+	// if isCoinBaseTx(st.msg) {
+	// 	log.Info("Pangu coinbase transaction", "from", st.msg.From.Hex())
+	// 	return &ExecutionResult{
+	// 		UsedGas:     st.gasUsed(),
+	// 		RefundedGas: 0,
+	// 		Err:         nil,
+	// 		ReturnData:  nil,
+	// 	}, nil
+	// }
+
+	// Check is done in the upper layer, here just add balance
+	if isTokenTransition(st.msg) {
+		log.Info("Token transition transaction", "to", st.msg.To.Hex(), "value", st.msg.Value)
+		st.state.AddBalance(*st.msg.To, uint256.MustFromBig(st.msg.Value))
 		return &ExecutionResult{
 			UsedGas:     st.gasUsed(),
 			RefundedGas: 0,
@@ -470,10 +492,44 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}, nil
 	}
 
-	// 检查已经在上层做了，这里直接加钱
-	if isTokenTransition(st.msg) {
-		log.Info("Token transition transaction", "to", st.msg.To.Hex(), "value", st.msg.Value)
-		st.state.AddBalance(*st.msg.To, uint256.MustFromBig(st.msg.Value))
+	if isPUNKTaintedLockTx(st.msg) {
+		log.Info("PUNKTaintedLock transaction", "from", st.msg.From.Hex())
+
+		// Parse Data: After the first two bytes 0x0D03, the third byte indicates the number of addresses,
+		// followed by 20 bytes for each address.
+		// Set the security level of these addresses to 0. It means the account is locked.
+		addressCount := st.msg.Data[2]
+		addresses := make([]common.Address, addressCount)
+		for i := 0; i < int(addressCount); i++ {
+			copy(addresses[i][:], st.msg.Data[3+i*20:])
+		}
+		for _, address := range addresses {
+			log.Info("PUNKTaintedLock", "address", address.Hex())
+			st.state.SetSecurityLevel(address, 0)
+		}
+
+		return &ExecutionResult{
+			UsedGas:     st.gasUsed(),
+			RefundedGas: 0,
+			Err:         nil,
+			ReturnData:  nil,
+		}, nil
+	}
+
+	if isPUNKTaintedUnlockTx(st.msg) {
+		log.Info("PUNKTaintedUnlock transaction", "from", st.msg.From.Hex())
+		// Parse Data: After the first two bytes 0x0D04, the third byte indicates the number of addresses,
+		// followed by 20 bytes for each address.
+		// Set the security level of these addresses to 1. It means the account is unlocked.
+		addressCount := st.msg.Data[2]
+		addresses := make([]common.Address, addressCount)
+		for i := 0; i < int(addressCount); i++ {
+			copy(addresses[i][:], st.msg.Data[3+i*20:])
+		}
+		for _, address := range addresses {
+			st.state.SetSecurityLevel(address, 1)
+		}
+
 		return &ExecutionResult{
 			UsedGas:     st.gasUsed(),
 			RefundedGas: 0,
@@ -658,6 +714,26 @@ func isTokenTransition(msg *Message) bool {
 		return false
 	}
 	if msg.Data[0] == 0x0D && msg.Data[1] == 0x02 {
+		return true
+	}
+	return false
+}
+
+func isPUNKTaintedLockTx(msg *Message) bool {
+	if msg.Data == nil || len(msg.Data) < 3 {
+		return false
+	}
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x03 {
+		return true
+	}
+	return false
+}
+
+func isPUNKTaintedUnlockTx(msg *Message) bool {
+	if msg.Data == nil || len(msg.Data) < 3 {
+		return false
+	}
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x04 {
 		return true
 	}
 	return false

@@ -51,6 +51,9 @@ var (
 	// next one expected based on the local chain.
 	ErrNonceTooHigh = errors.New("nonce too high")
 
+	// ErrAccountLocked is returned if the account is locked.
+	ErrAccountLocked = errors.New("account is locked")
+
 	// ErrNonceMax is returned if the nonce of a transaction sender account has
 	// maximum allowed value and would become invalid if incremented.
 	ErrNonceMax = errors.New("nonce has max value")
