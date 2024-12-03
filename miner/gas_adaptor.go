@@ -31,9 +31,6 @@ func NewGasAdaptor(minGas, maxGas, initialGas uint64, alphaNumerator, alphaDenom
 }
 
 // AdjustGas 更新 EMA 并调整 Gas
-// parentEMAGas 也改为整数，实际值需要除以 PRECISION
-const GAS_PRECISION uint64 = 1000000 // 精度为 6 位小数
-
 func (ga *GasAdaptor) AdjustGas(
 	blockGasNumerator, blockGasDenominator uint64,
 	parentEMAGasNumerator, parentEMAGasDenominator uint64,
@@ -42,47 +39,58 @@ func (ga *GasAdaptor) AdjustGas(
 	if blockGasNumerator != 0 && blockGasDenominator == 0 {
 		panic("blockGasDenominator cannot be zero when blockGasNumerator is not zero")
 	}
-	// if blockGasNumerator > blockGasDenominator {
-	// 	panic("blockGasNumerator must be less than or equal to blockGasDenominator")
-	// }
 	if parentEMAGasNumerator != 0 && parentEMAGasDenominator == 0 {
 		panic("parentEMAGasDenominator cannot be zero when parentEMAGasNumerator is not zero")
 	}
 
-	// 使用整数计算 EMA
-	// newEMA = (alpha * blockGas + (1-alpha) * parentEMA)
-	// = (alphaNumerator * blockGas * PRECISION + (alphaDenominator-alphaNumerator) * parentEMAGas) / alphaDenominator
+	// First term: alpha * blockGas
+	// = (alphaNumerator * blockGasNumerator) / (alphaDenominator * blockGasDenominator)
+	term1Num := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(ga.alphaNumerator),
+		big.NewInt(0).SetUint64(blockGasNumerator),
+	)
+	term1Denom := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(ga.alphaDenominator),
+		big.NewInt(0).SetUint64(blockGasDenominator),
+	)
 
-	// 先计算 blockGas 项
-	blockGasTerm := new(big.Int).SetUint64(ga.alphaNumerator)
-	blockGasTerm.Mul(blockGasTerm, new(big.Int).SetUint64(blockGasNumerator))
-	blockGasTerm.Mul(blockGasTerm, new(big.Int).SetUint64(GAS_PRECISION))
-	if blockGasDenominator == 0 {
-		blockGasDenominator = 1
-	}
-	blockGasTerm.Div(blockGasTerm, new(big.Int).SetUint64(blockGasDenominator))
+	// Second term: (1-alpha) * parentEMAGas
+	// = ((alphaDenominator-alphaNumerator) * parentEMAGasNumerator) / (alphaDenominator * parentEMAGasDenominator)
+	term2Num := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(ga.alphaDenominator-ga.alphaNumerator),
+		big.NewInt(0).SetUint64(parentEMAGasNumerator),
+	)
+	term2Denom := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(ga.alphaDenominator),
+		big.NewInt(0).SetUint64(parentEMAGasDenominator),
+	)
 
-	// 再计算 parentEMAGas 项
-	parentTerm := new(big.Int).SetUint64(ga.alphaDenominator - ga.alphaNumerator)
-	parentTerm.Mul(parentTerm, new(big.Int).SetUint64(parentEMAGasNumerator))
-	parentTerm.Mul(parentTerm, new(big.Int).SetUint64(GAS_PRECISION))
-	if parentEMAGasDenominator == 0 {
-		parentEMAGasDenominator = 1
-	}
-	parentTerm.Div(parentTerm, new(big.Int).SetUint64(parentEMAGasDenominator))
+	// Reduce each fraction first
+	term1Num, term1Denom = reduceFraction(term1Num, term1Denom)
+	term2Num, term2Denom = reduceFraction(term2Num, term2Denom)
 
-	// 合并两项并除以 alphaDenominator
-	newEMAGas := new(big.Int).Add(blockGasTerm, parentTerm)
+	// Find least common multiple of denominators
+	commonDenom := lcm(term1Denom, term2Denom)
 
-	// 设置新的平均值分子
-	newAvgNumerator = newEMAGas.Uint64()
-	// 设置新的平均值分母
-	newAvgDenominator = ga.alphaDenominator * GAS_PRECISION
+	// Calculate multipliers for each term
+	term1Multiplier := new(big.Int).Div(commonDenom, term1Denom)
+	term2Multiplier := new(big.Int).Div(commonDenom, term2Denom)
 
-	// 计算新的 Gas 值
-	newGas = newEMAGas.Div(newEMAGas, new(big.Int).SetUint64(GAS_PRECISION)).Uint64()
+	// Convert terms to common denominator using minimal multiplication
+	term1NumConverted := new(big.Int).Mul(term1Num, term1Multiplier)
+	term2NumConverted := new(big.Int).Mul(term2Num, term2Multiplier)
 
-	// 限制 Gas 在上下限之间
+	// Sum up numerator
+	newAvgRatioNumerator := new(big.Int).Add(term1NumConverted, term2NumConverted)
+	newAvgRatioDenominator := commonDenom
+
+	// Reduce the final fraction
+	reducedNum, reducedDenom := reduceFraction(newAvgRatioNumerator, newAvgRatioDenominator)
+
+	// Calculate new Gas value
+	newGas = new(big.Int).Div(reducedNum, reducedDenom).Uint64()
+
+	// Limit Gas within min and max bounds
 	if newGas < ga.minGas {
 		newGas = ga.minGas
 	} else if newGas > ga.maxGas {
@@ -90,7 +98,10 @@ func (ga *GasAdaptor) AdjustGas(
 	}
 
 	ga.currentGas = newGas
-	return newGas, newAvgNumerator, newAvgDenominator
+
+	// Scale down the values if they're too large for uint64
+	scaledNum, scaledDenom := scaleDownBigInts(reducedNum, reducedDenom)
+	return newGas, scaledNum, scaledDenom
 }
 
 // GetCurrentGas 返回当前 PoW Gas

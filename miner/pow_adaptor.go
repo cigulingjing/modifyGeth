@@ -1,10 +1,9 @@
 package miner
 
 import (
+	"fmt"
 	"math/big"
 )
-
-const RATIO_PRECISION = 1000000 // 精度为 6 位小数
 
 // PoWAdaptor 用于调整 PoW 相关参数
 type PoWAdaptor struct {
@@ -22,13 +21,15 @@ type PoWAdaptor struct {
 	currentDifficulty *big.Int
 
 	// 价格调整参数
-	kpNumerator      uint64
-	kpDenominator    uint64
-	kiNumerator      uint64
-	kiDenominator    uint64
-	minPrice         *big.Int
-	maxPrice         *big.Int
-	accumulatedError int64
+	kpNumerator   uint64
+	kpDenominator uint64
+	kiNumerator   uint64
+	kiDenominator uint64
+	minPrice      *big.Int
+	maxPrice      *big.Int
+	// Store accumulated error as fraction
+	accumulatedErrorNumerator   *big.Int
+	accumulatedErrorDenominator *big.Int
 }
 
 // NewPoWAdaptor 创建一个新的 PoWAdaptor 实例
@@ -79,22 +80,23 @@ func NewPoWAdaptor(
 		panic("initialDifficulty must be positive")
 	}
 	return &PoWAdaptor{
-		targetPowRatioNumerator:   targetPowRatioNumerator,
-		targetPowRatioDenominator: targetPowRatioDenominator,
-		alphaNumerator:            alphaNumerator,
-		alphaDenominator:          alphaDenominator,
-		fMinNumerator:             fMinNumerator,
-		fMinDenominator:           fMinDenominator,
-		fMaxNumerator:             fMaxNumerator,
-		fMaxDenominator:           fMaxDenominator,
-		currentDifficulty:         new(big.Int).Set(initialDifficulty),
-		kpNumerator:               kpNumerator,
-		kpDenominator:             kpDenominator,
-		kiNumerator:               kiNumerator,
-		kiDenominator:             kiDenominator,
-		minPrice:                  new(big.Int).Set(minPrice),
-		maxPrice:                  new(big.Int).Set(maxPrice),
-		accumulatedError:          0,
+		targetPowRatioNumerator:     targetPowRatioNumerator,
+		targetPowRatioDenominator:   targetPowRatioDenominator,
+		alphaNumerator:              alphaNumerator,
+		alphaDenominator:            alphaDenominator,
+		fMinNumerator:               fMinNumerator,
+		fMinDenominator:             fMinDenominator,
+		fMaxNumerator:               fMaxNumerator,
+		fMaxDenominator:             fMaxDenominator,
+		currentDifficulty:           new(big.Int).Set(initialDifficulty),
+		kpNumerator:                 kpNumerator,
+		kpDenominator:               kpDenominator,
+		kiNumerator:                 kiNumerator,
+		kiDenominator:               kiDenominator,
+		minPrice:                    new(big.Int).Set(minPrice),
+		maxPrice:                    new(big.Int).Set(maxPrice),
+		accumulatedErrorNumerator:   big.NewInt(0),
+		accumulatedErrorDenominator: big.NewInt(1),
 	}
 }
 
@@ -123,135 +125,178 @@ func (pa *PoWAdaptor) AdjustParameters(
 	if parentPrice.Sign() < 0 {
 		panic("parentPrice cannot be negative")
 	}
-	// 计算新的平均比率
-	currentRatio := new(big.Int).Mul(
-		big.NewInt(int64(currentPowRatioNumerator)),
-		big.NewInt(RATIO_PRECISION),
-	)
-	currentRatio.Div(currentRatio, big.NewInt(int64(currentPowRatioDenominator)))
 
-	parentRatio := big.NewInt(0)
-	if parentAvgRatioDenominator != 0 {
-		parentRatio = new(big.Int).Mul(
-			big.NewInt(int64(parentAvgRatioNumerator)),
-			big.NewInt(RATIO_PRECISION),
-		)
-		parentRatio.Div(parentRatio, big.NewInt(int64(parentAvgRatioDenominator)))
+	// First term: alpha * currentRatio
+	// = (alphaNumerator * currentRatioNumerator) / (alphaDenominator * currentRatioDenominator)
+	term1Num := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(pa.alphaNumerator),
+		big.NewInt(0).SetUint64(currentPowRatioNumerator),
+	)
+
+	term1Denom := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(pa.alphaDenominator),
+		big.NewInt(0).SetUint64(currentPowRatioDenominator),
+	)
+	// Second term: (1-alpha) * parentAvgRatio
+	// = ((alphaDenominator-alphaNumerator) * parentAvgRatioNumerator) / (alphaDenominator * parentAvgRatioDenominator)
+	term2Num := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(pa.alphaDenominator-pa.alphaNumerator),
+		big.NewInt(0).SetUint64(parentAvgRatioNumerator),
+	)
+	term2Denom := new(big.Int).Mul(
+		big.NewInt(0).SetUint64(pa.alphaDenominator),
+		big.NewInt(0).SetUint64(parentAvgRatioDenominator),
+	)
+
+	// Reduce each fraction first
+	term1Num, term1Denom = reduceFraction(term1Num, term1Denom)
+	term2Num, term2Denom = reduceFraction(term2Num, term2Denom)
+
+	// Find least common multiple of denominators
+	commonDenom := lcm(term1Denom, term2Denom)
+
+	// Calculate multipliers for each term
+	term1Multiplier := new(big.Int).Div(commonDenom, term1Denom)
+	term2Multiplier := new(big.Int).Div(commonDenom, term2Denom)
+
+	// Convert terms to common denominator using minimal multiplication
+	term1NumConverted := new(big.Int).Mul(term1Num, term1Multiplier)
+	term2NumConverted := new(big.Int).Mul(term2Num, term2Multiplier)
+
+	// Sum up numerator
+	newAvgRatioNumerator := new(big.Int).Add(term1NumConverted, term2NumConverted)
+	newAvgRatioDenominator := commonDenom
+
+	// Reduce the final fraction
+	reducedNum, reducedDenom := reduceFraction(newAvgRatioNumerator, newAvgRatioDenominator)
+	if reducedNum.Cmp(reducedDenom) > 0 {
+		fmt.Println("reducedNum > reducedDenom")
 	}
 
-	// 计算新的 EMA
-	newAvgRatio := new(big.Int).Mul(
-		big.NewInt(int64(pa.alphaNumerator)),
-		currentRatio,
-	)
-	newAvgRatio.Mul(newAvgRatio, big.NewInt(RATIO_PRECISION))
+	// Calculate new difficulty using the reduced ratio
+	newDifficulty := pa.calculateNewDifficulty(reducedNum, reducedDenom)
 
-	parentTerm := new(big.Int).Mul(
-		big.NewInt(int64(pa.alphaDenominator-pa.alphaNumerator)),
-		parentRatio,
-	)
+	// Calculate new price
+	newPrice := pa.calculateNewPrice(currentPowRatioNumerator, currentPowRatioDenominator, parentPrice)
 
-	newAvgRatio.Add(newAvgRatio, parentTerm)
+	// Scale down the values if they're too large for uint64
+	scaledNum, scaledDenom := scaleDownBigInts(reducedNum, reducedDenom)
 
-	// 保存新的平均比率
-	newAvgRatioNumerator := newAvgRatio.Uint64()
-	newAvgRatioDenominator := pa.alphaDenominator * RATIO_PRECISION
-
-	// 计算新难度
-	newDifficulty := pa.calculateNewDifficulty(newAvgRatio)
-
-	// 计算新价格
-	newPrice := pa.calculateNewPrice(currentRatio, parentPrice)
-
-	return newDifficulty, newPrice, newAvgRatioNumerator, newAvgRatioDenominator
+	return newDifficulty, newPrice, scaledNum, scaledDenom
 }
 
 // calculateNewDifficulty 计算新的难度值
-func (pa *PoWAdaptor) calculateNewDifficulty(newAvgRatio *big.Int) *big.Int {
-	// 继续计算新的难度值
-	avgRatioForDiff := new(big.Int).Div(newAvgRatio, big.NewInt(int64(pa.alphaDenominator)))
-
-	// 计算调整因子 f = newAvgRatio / targetPowRatio
-	targetRatio := new(big.Int).Mul(
-		big.NewInt(int64(pa.targetPowRatioNumerator)),
-		big.NewInt(RATIO_PRECISION),
+func (pa *PoWAdaptor) calculateNewDifficulty(newAvgRatioNumerator, newAvgRatioDenominator *big.Int) *big.Int {
+	// Calculate avgRatioForDiff = newAvgRatio/alphaDenominator
+	// = newAvgRatioNumerator/(newAvgRatioDenominator * alphaDenominator)
+	avgRatioForDiffNumerator := new(big.Int).Set(newAvgRatioNumerator)
+	avgRatioForDiffDenominator := new(big.Int).Mul(
+		newAvgRatioDenominator,
+		new(big.Int).SetUint64(pa.alphaDenominator),
 	)
-	targetRatio.Div(targetRatio, big.NewInt(int64(pa.targetPowRatioDenominator)))
 
-	adjustmentFactor := new(big.Int).Mul(
-		avgRatioForDiff,
-		big.NewInt(RATIO_PRECISION),
-	)
-	adjustmentFactor.Div(adjustmentFactor, targetRatio)
+	// Calculate targetRatio = targetPowRatioNumerator/targetPowRatioDenominator
+	targetRatioNumerator := new(big.Int).SetUint64(pa.targetPowRatioNumerator)
+	targetRatioDenominator := new(big.Int).SetUint64(pa.targetPowRatioDenominator)
 
-	// 限制调整因子范围
-	minFactor := new(big.Int).Mul(
-		big.NewInt(int64(pa.fMinNumerator)),
-		big.NewInt(RATIO_PRECISION),
-	)
-	minFactor.Div(minFactor, big.NewInt(int64(pa.fMinDenominator)))
+	// Calculate adjustmentFactor = avgRatioForDiff/targetRatio
+	// = (avgRatioForDiffNumerator * targetRatioDenominator)/(avgRatioForDiffDenominator * targetRatioNumerator)
+	adjustmentFactorNumerator := new(big.Int).Mul(avgRatioForDiffNumerator, targetRatioDenominator)
+	adjustmentFactorDenominator := new(big.Int).Mul(avgRatioForDiffDenominator, targetRatioNumerator)
 
-	maxFactor := new(big.Int).Mul(
-		big.NewInt(int64(pa.fMaxNumerator)),
-		big.NewInt(RATIO_PRECISION),
-	)
-	maxFactor.Div(maxFactor, big.NewInt(int64(pa.fMaxDenominator)))
+	// Calculate min/max factors as fractions
+	minFactorNumerator := new(big.Int).SetUint64(pa.fMinNumerator)
+	minFactorDenominator := new(big.Int).SetUint64(pa.fMinDenominator)
 
-	if adjustmentFactor.Cmp(minFactor) < 0 {
-		adjustmentFactor.Set(minFactor)
-	} else if adjustmentFactor.Cmp(maxFactor) > 0 {
-		adjustmentFactor.Set(maxFactor)
+	maxFactorNumerator := new(big.Int).SetUint64(pa.fMaxNumerator)
+	maxFactorDenominator := new(big.Int).SetUint64(pa.fMaxDenominator)
+
+	// Compare fractions: a/b < c/d equivalent to a*d < c*b
+	minComparison := new(big.Int).Mul(adjustmentFactorNumerator, minFactorDenominator).Cmp(
+		new(big.Int).Mul(minFactorNumerator, adjustmentFactorDenominator))
+
+	maxComparison := new(big.Int).Mul(adjustmentFactorNumerator, maxFactorDenominator).Cmp(
+		new(big.Int).Mul(maxFactorNumerator, adjustmentFactorDenominator))
+
+	if minComparison < 0 {
+		adjustmentFactorNumerator = minFactorNumerator
+		adjustmentFactorDenominator = minFactorDenominator
+	} else if maxComparison > 0 {
+		adjustmentFactorNumerator = maxFactorNumerator
+		adjustmentFactorDenominator = maxFactorDenominator
 	}
 
-	// 计算新难度
-	newDifficulty := new(big.Int).Mul(pa.currentDifficulty, adjustmentFactor)
-	newDifficulty.Div(newDifficulty, big.NewInt(RATIO_PRECISION))
+	// Calculate new difficulty = currentDifficulty * adjustmentFactor
+	// Only perform the actual division at the end
+	newDifficulty := new(big.Int).Mul(pa.currentDifficulty, adjustmentFactorNumerator)
+	newDifficulty.Div(newDifficulty, adjustmentFactorDenominator)
 
-	// 更新当前难度
+	// Update current difficulty
 	pa.currentDifficulty.Set(newDifficulty)
 
 	return newDifficulty
 }
 
 // calculateNewPrice 计算新的价格
-func (pa *PoWAdaptor) calculateNewPrice(currentRatio *big.Int, parentPrice *big.Int) *big.Int {
-	// 计算目标比率
-	targetRatio := new(big.Int).Mul(
+func (pa *PoWAdaptor) calculateNewPrice(
+	currentRatioNumerator, currentRatioDenominator uint64,
+	parentPrice *big.Int,
+) *big.Int {
+	// Calculate error = targetRatio - currentRatio
+	// = (targetRatioNumerator*currentRatioDenominator - currentRatioNumerator*targetRatioDenominator) / (targetRatioDenominator*currentRatioDenominator)
+	errorNumerator := new(big.Int).Mul(
 		big.NewInt(int64(pa.targetPowRatioNumerator)),
-		big.NewInt(RATIO_PRECISION),
+		big.NewInt(int64(currentRatioDenominator)),
 	)
-	targetRatio.Div(targetRatio, big.NewInt(int64(pa.targetPowRatioDenominator)))
-
-	// 计算误差 error = targetPowRatio - currentRatio
-	error := targetRatio.Int64() - currentRatio.Int64()
-	pa.accumulatedError += error
-
-	// 计算价格调整
-	// adjustment = kp*error + ki*accumulatedError
-	// = (kpNumerator*error*RATIO_PRECISION/kpDenominator + kiNumerator*accumulatedError*RATIO_PRECISION/kiDenominator)
-
-	kpAdjustment := new(big.Int).Mul(
-		big.NewInt(error),
-		big.NewInt(int64(pa.kpNumerator)),
+	errorNumerator.Sub(
+		errorNumerator,
+		new(big.Int).Mul(
+			big.NewInt(int64(currentRatioNumerator)),
+			big.NewInt(int64(pa.targetPowRatioDenominator)),
+		),
 	)
-	kpAdjustment.Mul(kpAdjustment, big.NewInt(RATIO_PRECISION))
-	kpAdjustment.Div(kpAdjustment, big.NewInt(int64(pa.kpDenominator)))
+	errorDenominator := new(big.Int).SetUint64(pa.targetPowRatioDenominator * currentRatioDenominator)
 
-	kiAdjustment := new(big.Int).Mul(
-		big.NewInt(pa.accumulatedError),
-		big.NewInt(int64(pa.kiNumerator)),
+	// Reduce error fraction
+	errorNumerator, errorDenominator = reduceFraction(errorNumerator, errorDenominator)
+
+	// Update accumulated error as fraction
+	newAccErrorNumerator := new(big.Int).Mul(pa.accumulatedErrorNumerator, errorDenominator)
+	newAccErrorNumerator.Add(
+		newAccErrorNumerator,
+		new(big.Int).Mul(errorNumerator, pa.accumulatedErrorDenominator),
 	)
-	kiAdjustment.Mul(kiAdjustment, big.NewInt(RATIO_PRECISION))
-	kiAdjustment.Div(kiAdjustment, big.NewInt(int64(pa.kiDenominator)))
+	newAccErrorDenominator := new(big.Int).Mul(pa.accumulatedErrorDenominator, errorDenominator)
 
-	// 总调整量
-	totalAdjustment := new(big.Int).Add(kpAdjustment, kiAdjustment)
+	// Reduce accumulated error fraction
+	newAccErrorNumerator, newAccErrorDenominator = reduceFraction(newAccErrorNumerator, newAccErrorDenominator)
 
-	// 计算新价格
+	pa.accumulatedErrorNumerator = newAccErrorNumerator
+	pa.accumulatedErrorDenominator = newAccErrorDenominator
+
+	// Calculate price adjustment
+	term1 := new(big.Int).Mul(errorNumerator, big.NewInt(int64(pa.kpNumerator)))
+	term1.Mul(term1, big.NewInt(int64(pa.kiDenominator)))
+
+	term2 := new(big.Int).Mul(pa.accumulatedErrorNumerator, big.NewInt(int64(pa.kiNumerator)))
+	term2.Mul(term2, big.NewInt(int64(pa.kpDenominator)))
+	term2.Mul(term2, errorDenominator)
+
+	totalAdjustmentNumerator := new(big.Int).Add(term1, term2)
+	totalAdjustmentDenominator := new(big.Int).SetUint64(pa.kpDenominator * pa.kiDenominator)
+	totalAdjustmentDenominator.Mul(totalAdjustmentDenominator, errorDenominator)
+	totalAdjustmentDenominator.Mul(totalAdjustmentDenominator, pa.accumulatedErrorDenominator)
+
+	// Reduce total adjustment fraction
+	totalAdjustmentNumerator, totalAdjustmentDenominator = reduceFraction(totalAdjustmentNumerator, totalAdjustmentDenominator)
+
+	// Calculate total adjustment
+	totalAdjustment := new(big.Int).Div(totalAdjustmentNumerator, totalAdjustmentDenominator)
+
+	// Calculate new price
 	newPrice := new(big.Int).Add(parentPrice, totalAdjustment)
-	newPrice.Div(newPrice, big.NewInt(RATIO_PRECISION))
 
-	// 限制价格范围
+	// Limit price within min and max bounds
 	if newPrice.Cmp(pa.minPrice) < 0 {
 		newPrice.Set(pa.minPrice)
 	} else if newPrice.Cmp(pa.maxPrice) > 0 {
@@ -266,10 +311,14 @@ func (pa *PoWAdaptor) GetCurrentDifficulty() *big.Int {
 	return new(big.Int).Set(pa.currentDifficulty)
 }
 
-func (pa *PoWAdaptor) GetAccumulatedError() int64 {
-	return pa.accumulatedError
+func (pa *PoWAdaptor) GetAccumulatedError() (*big.Int, *big.Int) {
+	return reduceFraction(
+		new(big.Int).Set(pa.accumulatedErrorNumerator),
+		new(big.Int).Set(pa.accumulatedErrorDenominator),
+	)
 }
 
 func (pa *PoWAdaptor) ResetAccumulatedError() {
-	pa.accumulatedError = 0
+	pa.accumulatedErrorNumerator = big.NewInt(0)
+	pa.accumulatedErrorDenominator = big.NewInt(1)
 }
