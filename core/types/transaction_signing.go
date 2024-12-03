@@ -184,10 +184,23 @@ type cancunSigner struct{ londonSigner }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewCancunSigner(chainId *big.Int) Signer {
+	fmt.Println("cancun!!!!!!!!")
 	return cancunSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
 }
 
 func (s cancunSigner) Sender(tx *Transaction) (common.Address, error) {
+	fmt.Println("cancun sender invoke")
+	if tx.Type() == PowTxType {
+		V, R, S := tx.RawSignatureValues()
+		// POW txs are defined to use 0 and 1 as their recovery
+		// id, add 27 to become equivalent to unprotected Homestead signatures.
+		V = new(big.Int).Add(V, big.NewInt(27))
+		if tx.ChainId().Cmp(s.chainId) != 0 {
+			return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
+		}
+		return recoverPlain(s.Hash(tx), R, S, V, true)
+	}
+
 	if tx.Type() != BlobTxType {
 		return s.londonSigner.Sender(tx)
 	}
@@ -207,6 +220,18 @@ func (s cancunSigner) Equal(s2 Signer) bool {
 }
 
 func (s cancunSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	txdata1, ok1 := tx.inner.(*PowTx)
+	if ok1 {
+		// Check that chain ID of tx matches the signer. We also accept ID zero here,
+		// because it indicates that the chain ID was not specified in the tx.
+		if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
+			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata1.ChainID, s.chainId)
+		}
+		R, S, _ = decodeSignature(sig)
+		V = big.NewInt(int64(sig[64]))
+		return R, S, V, nil
+	}
+
 	txdata, ok := tx.inner.(*BlobTx)
 	if !ok {
 		return s.londonSigner.SignatureValues(tx, sig)
@@ -224,9 +249,25 @@ func (s cancunSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s cancunSigner) Hash(tx *Transaction) common.Hash {
+	if tx.Type() == PowTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.GasPrice(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.HashNonce(),
+			})
+	}
+
 	if tx.Type() != BlobTxType {
 		return s.londonSigner.Hash(tx)
 	}
+
 	return prefixedRlpHash(
 		tx.Type(),
 		[]interface{}{
@@ -252,10 +293,12 @@ type londonSigner struct{ eip2930Signer }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewLondonSigner(chainId *big.Int) Signer {
+	fmt.Println("london!!!!!!!!")
 	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
+	fmt.Println("london sender invoke")
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
@@ -328,8 +371,18 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 }
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
+	fmt.Println("eip2930 sender invoke")
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
+	case PowTxType:
+		V, R, S := tx.RawSignatureValues()
+		// POW txs are defined to use 0 and 1 as their recovery
+		// id, add 27 to become equivalent to unprotected Homestead signatures.
+		V = new(big.Int).Add(V, big.NewInt(27))
+		if tx.ChainId().Cmp(s.chainId) != 0 {
+			return common.Address{}, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, tx.ChainId(), s.chainId)
+		}
+		return recoverPlain(s.Hash(tx), R, S, V, true)
 	case LegacyTxType:
 		return s.EIP155Signer.Sender(tx)
 	case AccessListTxType:
@@ -347,6 +400,15 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 
 func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	switch txdata := tx.inner.(type) {
+	case *PowTx:
+		// Check that chain ID of tx matches the signer. We also accept ID zero here,
+		// because it indicates that the chain ID was not specified in the tx.
+		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+			return nil, nil, nil, fmt.Errorf("%w: have %d want %d", ErrInvalidChainId, txdata.ChainID, s.chainId)
+		}
+		R, S, _ = decodeSignature(sig)
+		V = big.NewInt(int64(sig[64]))
+		return R, S, V, nil
 	case *LegacyTx:
 		return s.EIP155Signer.SignatureValues(tx, sig)
 	case *AccessListTx:
@@ -367,6 +429,19 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // It does not uniquely identify the transaction.
 func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.Type() {
+	case PowTxType:
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.GasPrice(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.HashNonce(),
+			})
 	case LegacyTxType:
 		return s.EIP155Signer.Hash(tx)
 	case AccessListTxType:
@@ -419,6 +494,7 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 var big8 = big.NewInt(8)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
+	fmt.Println("eip1559 sender invoke")
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -482,6 +558,7 @@ func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v 
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
+	fmt.Println("homestead sender invoke")
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -616,7 +693,9 @@ func (s panguSigner) Equal(s2 Signer) bool {
 }
 
 func (s panguSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
+	fmt.Println("pangusig  !! is invoke")
 	txdata, ok := tx.inner.(*PowTx)
+	fmt.Println(ok)
 	if !ok {
 		return s.cancunSigner.SignatureValues(tx, sig)
 	}
@@ -660,13 +739,14 @@ type panguSignerV1 struct{ panguSigner }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewPanguSignerV1(chainId *big.Int) Signer {
+	fmt.Println("panguv1!!!!!!!!")
 	return panguSignerV1{panguSigner{cancunSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}}}
 }
 
 // TODO:待修改
 func (s panguSignerV1) Sender(tx *Transaction) (common.Address, error) {
 	if tx.Type() != DynamicCryptoTxType {
-		return s.cancunSigner.Sender(tx)
+		return s.panguSigner.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
 	// POW txs are defined to use 0 and 1 as their recovery
@@ -686,7 +766,7 @@ func (s panguSignerV1) Equal(s2 Signer) bool {
 func (s panguSignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	txdata, ok := tx.inner.(*DynamicCryptoTx)
 	if !ok {
-		return s.cancunSigner.SignatureValues(tx, sig)
+		return s.panguSigner.SignatureValues(tx, sig)
 	}
 	// Check that chain ID of tx matches the signer. We also accept ID zero here,
 	// because it indicates that the chain ID was not specified in the tx.
@@ -702,7 +782,7 @@ func (s panguSignerV1) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // It does not uniquely identify the transaction.
 func (s panguSignerV1) Hash(tx *Transaction) common.Hash {
 	if tx.Type() != DynamicCryptoTxType {
-		return s.cancunSigner.Hash(tx)
+		return s.panguSigner.Hash(tx)
 	}
 	return prefixedRlpHash(
 		tx.Type(),

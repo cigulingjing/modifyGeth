@@ -1448,6 +1448,8 @@ func (s *StateDB) CopyOffchainUse() (state *StateDB) {
 // security level
 func (s *StateDB) GetSecurityLevel(addr common.Address) uint64 {
 	stateObject := s.getStateObject(addr)
+	fmt.Println("get addr", addr)
+
 	if stateObject != nil {
 		return stateObject.SecurityLevel()
 	}

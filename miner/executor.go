@@ -81,6 +81,7 @@ type executorServer struct {
 
 // Receive txs from consensus layer
 func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock) (*pb.Empty, error) {
+	fmt.Println("get commit block")
 	// sharding check
 	sharding, err := hexutil.DecodeUint64(string(pbBlock.ShardingName))
 	if err != nil {
@@ -162,7 +163,7 @@ type executorClient struct {
 
 // need add a loop routine to sendTx to consensus layer, when execCh has new txs
 func (ec *executorClient) sendTx(tx *types.Transaction, nid uint64) (*pb.Empty, error) {
-	log.Info("send tx to consensus")
+	log.Info("begin send tx to consensus")
 	data, err := tx.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -201,6 +202,7 @@ func (ec *executorClient) sendTx(tx *types.Transaction, nid uint64) (*pb.Empty, 
 	if err != nil {
 		return nil, err
 	}
+	log.Info("finish send tx to consensus")
 	return &pb.Empty{}, nil
 
 }
@@ -308,10 +310,24 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 		offChainCh: make(chan bool),
 
 		// TODO: 添加调整器
-		// difficultyAdaptor: NewDifficultyAdaptor(0.5, 0.5, 0.1, 10.0, big.NewInt(1), 0.0),
-		// priceAdaptor: NewPriceAdaptor(0.5, 0.5, 0.1, 10.0, big.NewInt(1), 0.0),
-		// gasAdaptor: NewGasAdaptor(1000000, 10000000, 1000000, 0.1),
-		// powAdaptor: NewPoWAdaptor(0.5, 0.5, 0.1, 10.0, big.NewInt(1), 0.0),
+		gasAdaptor: NewGasAdaptor(
+			1000000,  // minGas: 最小 gas 限制
+			30000000, // maxGas: 最大 gas 限制，与 DefaultConfig.GasCeil 保持一致
+			8000000,  // initialGas: 初始 gas 限制
+			3,        // alphaNumerator: EMA 平滑因子分子，表示新数据占 30% 权重
+			10,       // alphaDenominator: EMA 平滑因子分母
+		),
+		powAdaptor: NewPoWAdaptor(
+			3, 10, // targetPowRatio: 目标 PoW 交易比例为 30%
+			2, 10, // alpha: EMA 平滑因子为 0.2
+			8, 10, // fMin: 最小调整因子为 0.8
+			12, 10, // fMax: 最大调整因子为 1.2
+			big.NewInt(1000000), // initialDifficulty: 初始难度
+			1, 10,               // kp: 比例调节系数为 0.1
+			1, 100, // ki: 积分调节系数为 0.01
+			big.NewInt(100),   // minPrice: 最小价格
+			big.NewInt(10000), // maxPrice: 最大价格
+		),
 	}
 
 	// Subscribe events for blockchain
@@ -553,6 +569,8 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 	newRatioNumerator := uint64(0)
 	newRatioDenominator := uint64(0)
 	if genParams.isExecution {
+		fmt.Println("parent.AvgRatioNumerator:", parent.AvgRatioNumerator)
+		fmt.Println("parent.AvgRatioDenominator:", parent.AvgRatioDenominator)
 		newDifficulty, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
 			genParams.currentRatioNumerator, genParams.txsCount,
 			parent.AvgRatioNumerator, parent.AvgRatioDenominator, parent.PowPrice,

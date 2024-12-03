@@ -34,8 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/merkeldag"
-	"github.com/ethereum/go-ethereum/merkeldag/mdagdb"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -153,7 +151,7 @@ func (ga *GenesisAlloc) hash(isVerkle bool) (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 		// default security level is 5
-		statedb.SetSecurityLevel(addr, 5)
+		statedb.SetSecurityLevel(addr, 1)
 	}
 	return statedb.Commit(0, false)
 }
@@ -519,15 +517,15 @@ func (g *Genesis) Commit(db ethdb.Database, triedb *trie.Database) (*types.Block
 		return nil, err
 	}
 	// generate merkel dag
-	mdag, err := merkeldag.NewMerkelDAG()
-	if err != nil {
-		panic(err)
-	}
-	mdag_root := mdag.GetRoot().GetHash()
-	block.Header().Tainted = mdag_root
+	// mdag, err := merkeldag.NewMerkelDAG()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// mdag_root := mdag.GetRoot().GetHash()
+	// block.Header().Tainted = mdag_root
 
-	mdagdb := mdagdb.NewMerkleDAGDB(db)
-	mdagdb.SaveDAG(mdag)
+	// mdagdb := mdagdb.NewMerkleDAGDB(db)
+	// mdagdb.SaveDAG(mdag)
 
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)

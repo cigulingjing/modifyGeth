@@ -359,10 +359,12 @@ func (st *StateTransition) preCheck() error {
 	msg := st.msg
 	// check address is locked?(it means the account sercurity level is 0)
 	fromSL := st.state.GetSecurityLevel(msg.From)
+	fmt.Println("fromSL=", fromSL)
 	if fromSL == 0 {
 		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.From.Hex())
 	}
 	toSL := st.state.GetSecurityLevel(*msg.To)
+	fmt.Println("toSL=", toSL)
 	if toSL == 0 {
 		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
 	}

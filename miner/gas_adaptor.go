@@ -42,9 +42,9 @@ func (ga *GasAdaptor) AdjustGas(
 	if blockGasNumerator != 0 && blockGasDenominator == 0 {
 		panic("blockGasDenominator cannot be zero when blockGasNumerator is not zero")
 	}
-	if blockGasNumerator > blockGasDenominator {
-		panic("blockGasNumerator must be less than or equal to blockGasDenominator")
-	}
+	// if blockGasNumerator > blockGasDenominator {
+	// 	panic("blockGasNumerator must be less than or equal to blockGasDenominator")
+	// }
 	if parentEMAGasNumerator != 0 && parentEMAGasDenominator == 0 {
 		panic("parentEMAGasDenominator cannot be zero when parentEMAGasNumerator is not zero")
 	}
@@ -57,12 +57,18 @@ func (ga *GasAdaptor) AdjustGas(
 	blockGasTerm := new(big.Int).SetUint64(ga.alphaNumerator)
 	blockGasTerm.Mul(blockGasTerm, new(big.Int).SetUint64(blockGasNumerator))
 	blockGasTerm.Mul(blockGasTerm, new(big.Int).SetUint64(GAS_PRECISION))
+	if blockGasDenominator == 0 {
+		blockGasDenominator = 1
+	}
 	blockGasTerm.Div(blockGasTerm, new(big.Int).SetUint64(blockGasDenominator))
 
 	// 再计算 parentEMAGas 项
 	parentTerm := new(big.Int).SetUint64(ga.alphaDenominator - ga.alphaNumerator)
 	parentTerm.Mul(parentTerm, new(big.Int).SetUint64(parentEMAGasNumerator))
 	parentTerm.Mul(parentTerm, new(big.Int).SetUint64(GAS_PRECISION))
+	if parentEMAGasDenominator == 0 {
+		parentEMAGasDenominator = 1
+	}
 	parentTerm.Div(parentTerm, new(big.Int).SetUint64(parentEMAGasDenominator))
 
 	// 合并两项并除以 alphaDenominator
