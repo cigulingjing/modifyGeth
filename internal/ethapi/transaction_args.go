@@ -59,6 +59,13 @@ type TransactionArgs struct {
 	// Introduced by EIP-4844.
 	BlobFeeCap *hexutil.Big  `json:"maxFeePerBlobGas"`
 	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+
+	// Introduced by powTxType
+	HashNonce *hexutil.Big `json:"hashNonce,omitempty"`
+
+	// Introduced by DynamicCryptoTxType
+	CryptoType    *hexutil.Bytes `json:"cryptoType,omitempty"`
+	SignatureData *hexutil.Bytes `json:"signatureData,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -323,6 +330,19 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
+	hashNonce := new(big.Int)
+	if args.HashNonce != nil {
+		hashNonce = args.HashNonce.ToInt()
+	}
+	cryptoType := []byte{}
+	if args.CryptoType != nil {
+		cryptoType = *args.CryptoType
+	}
+	signatureData := []byte{}
+	if args.SignatureData != nil {
+		signatureData = *args.SignatureData
+	}
+
 	msg := &core.Message{
 		From:              addr,
 		To:                args.To,
@@ -336,6 +356,9 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		BlobGasFeeCap:     blobFeeCap,
 		BlobHashes:        args.BlobHashes,
 		SkipAccountChecks: true,
+		HashNonce:         hashNonce,
+		CryptoType:        cryptoType,
+		SignatureData:     signatureData,
 	}
 	return msg, nil
 }
@@ -345,6 +368,42 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
+	case args.HashNonce != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.PowTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.data(),
+			AccessList: al,
+			HashNonce:  args.HashNonce.ToInt().Uint64(),
+		}
+	case args.CryptoType != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicCryptoTx{
+			To:            args.To,
+			ChainID:       (*big.Int)(args.ChainID),
+			Nonce:         uint64(*args.Nonce),
+			Gas:           uint64(*args.Gas),
+			GasFeeCap:     (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:     (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:         (*big.Int)(args.Value),
+			Data:          args.data(),
+			AccessList:    al,
+			CryptoType:    *args.CryptoType,
+			SignatureData: *args.SignatureData,
+		}
+
 	case args.BlobHashes != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
