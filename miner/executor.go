@@ -587,6 +587,7 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		)
 	}
 
+
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
@@ -932,7 +933,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 				e.offchainResultCatch(env)
 			}
 		} else {
-			log.Error("The first two bytes of the input data are not valid")
+			log.Info("Tx is not offchain type")
 		}
 	}
 
@@ -944,6 +945,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
 	log.Info("exec transaction success")
+	fmt.Println("exec transaction success")
 	return receipt.Logs, nil
 }
 

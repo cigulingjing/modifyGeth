@@ -23,13 +23,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
+
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/cryptoupgrade"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -362,6 +365,9 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 	// Create a client to interact with local geth node.
 	rpcClient := stack.Attach()
 	ethClient := ethclient.NewClient(rpcClient)
+
+	// * Bind cryptoupgrade  pull code event
+	go cryptoupgrade.BindPullcode(ethClient)
 
 	go func() {
 		// Open any wallets already attached
