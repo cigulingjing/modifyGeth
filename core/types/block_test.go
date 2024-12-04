@@ -352,6 +352,7 @@ func TestHeaderRLPEncodeDecodeWithAllFields(t *testing.T) {
 		BlobGasUsed:         new(uint64),
 		ExcessBlobGas:       new(uint64),
 		ParentBeaconRoot:    &common.Hash{4, 5, 6},
+		PowDifficulty:       big.NewInt(2000000),
 	}
 	*header.BlobGasUsed = 123
 	*header.ExcessBlobGas = 456
@@ -406,4 +407,5 @@ func TestHeaderRLPEncodeDecodeWithAllFields(t *testing.T) {
 	check("BlobGasUsed", decodedHeader.BlobGasUsed, header.BlobGasUsed)
 	check("ExcessBlobGas", decodedHeader.ExcessBlobGas, header.ExcessBlobGas)
 	check("ParentBeaconRoot", decodedHeader.ParentBeaconRoot, header.ParentBeaconRoot)
+	check("PowDifficulty", decodedHeader.PowDifficulty, header.PowDifficulty)
 }

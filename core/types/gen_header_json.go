@@ -34,6 +34,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		RandomRoot          common.Hash     `json:"randomRoot" gencodec:"required"`
 		MixDigest           common.Hash     `json:"mixHash"`
 		Nonce               BlockNonce      `json:"nonce"`
+		PowDifficulty       *hexutil.Big    `json:"powDifficulty" rlp:"optional"`
 		PowGas              hexutil.Uint64  `json:"powGas" rlp:"optional"`
 		PowPrice            *hexutil.Big    `json:"powPrice" rlp:"optional"`
 		AvgRatioNumerator   hexutil.Uint64  `json:"avgRatioNumerator" rlp:"optional"`
@@ -67,6 +68,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.RandomRoot = h.RandomRoot
 	enc.MixDigest = h.MixDigest
 	enc.Nonce = h.Nonce
+	enc.PowDifficulty = (*hexutil.Big)(h.PowDifficulty)
 	enc.PowGas = hexutil.Uint64(h.PowGas)
 	enc.PowPrice = (*hexutil.Big)(h.PowPrice)
 	enc.AvgRatioNumerator = hexutil.Uint64(h.AvgRatioNumerator)
@@ -104,6 +106,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		RandomRoot          *common.Hash    `json:"randomRoot" gencodec:"required"`
 		MixDigest           *common.Hash    `json:"mixHash"`
 		Nonce               *BlockNonce     `json:"nonce"`
+		PowDifficulty       *hexutil.Big    `json:"powDifficulty" rlp:"optional"`
 		PowGas              *hexutil.Uint64 `json:"powGas" rlp:"optional"`
 		PowPrice            *hexutil.Big    `json:"powPrice" rlp:"optional"`
 		AvgRatioNumerator   *hexutil.Uint64 `json:"avgRatioNumerator" rlp:"optional"`
@@ -187,6 +190,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Nonce != nil {
 		h.Nonce = *dec.Nonce
+	}
+	if dec.PowDifficulty != nil {
+		h.PowDifficulty = (*big.Int)(dec.PowDifficulty)
 	}
 	if dec.PowGas != nil {
 		h.PowGas = uint64(*dec.PowGas)

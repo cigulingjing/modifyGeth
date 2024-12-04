@@ -49,7 +49,10 @@ type ValidationOptions struct {
 func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types.Signer, opts *ValidationOptions) error {
 	// Check if it's a PoW transaction and validate its hash against difficulty
 	if tx.Type() == types.PowTxType {
-		valid, _ := types.VerifyTxWithDifficulty(tx, head.Difficulty)
+		if head.PowDifficulty == nil {
+			return fmt.Errorf("pow difficulty not set in header")
+		}
+		valid, _ := types.VerifyTxWithDifficulty(tx, head.PowDifficulty)
 		if !valid {
 			return fmt.Errorf("pow hash verification failed")
 		}
