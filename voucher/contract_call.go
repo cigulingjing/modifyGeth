@@ -105,11 +105,12 @@ func (bm *BoundMethod) Execute(evm *vm.EVM, result interface{}, caller *common.A
 		fmt.Println("Error invoking evm function: EVM call failure!", "Err:", err, "message:", hexutil.Encode(output))
 		return
 	}
-	if err = bm.decodeResult(result, output); err != nil {
-		fmt.Println("Error invoking evm function: can't unpack result!", "Err:", err)
-		return
+	if len(output) != 0 {
+		if err = bm.decodeResult(result, output); err != nil {
+			fmt.Println("Error invoking evm function: can't unpack result!", "Err:", err)
+			return
+		}
 	}
-
 	gasUsed = bm.maxGas - gasRemain
 	// fmt.Println("EVM call successful", "input", hexutil.Encode(input), "output", hexutil.Encode(output))
 	return

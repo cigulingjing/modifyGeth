@@ -117,7 +117,6 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 	if err != nil {
 		return nil, err
 	}
-	log.Info("Executor ApplyMessage, it's OK!")
 	// incentive recored
 	if result.Incentive != nil {
 		// Modify the memory value that the pointer incentive points to
@@ -156,6 +155,8 @@ func applyTransaction(msg *Message, config *params.ChainConfig, gp *GasPool, sta
 
 	// Set the receipt logs and create the bloom filter.
 	receipt.Logs = statedb.GetLogs(tx.Hash(), blockNumber.Uint64(), blockHash)
+	fmt.Printf("receipt.Logs: %v\n", receipt.Logs)
+
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = blockHash
 	receipt.BlockNumber = blockNumber

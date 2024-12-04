@@ -568,18 +568,20 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 	newGasDenominator := uint64(0)
 	newRatioNumerator := uint64(0)
 	newRatioDenominator := uint64(0)
-	if genParams.isExecution {
-		fmt.Println("parent.AvgRatioNumerator:", parent.AvgRatioNumerator)
-		fmt.Println("parent.AvgRatioDenominator:", parent.AvgRatioDenominator)
-		newDifficulty, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
-			genParams.currentRatioNumerator, genParams.txsCount,
-			parent.AvgRatioNumerator, parent.AvgRatioDenominator, parent.PowPrice,
-		)
-		newGas, newGasNumerator, newGasDenominator = e.gasAdaptor.AdjustGas(
-			genParams.currentAveGasNumerator, genParams.txsCount,
-			parent.AvgGasNumerator, parent.AvgGasDenominator,
-		)
-	}
+
+	// ! divide zero error
+	// if genParams.isExecution {
+	// 	fmt.Println("parent.AvgRatioNumerator:", parent.AvgRatioNumerator)
+	// 	fmt.Println("parent.AvgRatioDenominator:", parent.AvgRatioDenominator)
+	// 	newDifficulty, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
+	// 		genParams.currentRatioNumerator, genParams.txsCount,
+	// 		parent.AvgRatioNumerator, parent.AvgRatioDenominator, parent.PowPrice,
+	// 	)
+	// 	newGas, newGasNumerator, newGasDenominator = e.gasAdaptor.AdjustGas(
+	// 		genParams.currentAveGasNumerator, genParams.txsCount,
+	// 		parent.AvgGasNumerator, parent.AvgGasDenominator,
+	// 	)
+	// }
 
 	header := &types.Header{
 		ParentHash: parent.Hash(),
@@ -925,7 +927,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 				e.offchainResultCatch(env)
 			}
 		} else {
-			log.Error("The first two bytes of the input data are not valid")
+			log.Info("Tx is not offchain type")
 		}
 	}
 
@@ -937,6 +939,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
 	log.Info("exec transaction success")
+	fmt.Println("exec transaction success")
 	return receipt.Logs, nil
 }
 

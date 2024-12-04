@@ -4,156 +4,20 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/txpool"
-	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/voucher"
 	"github.com/holiman/uint256"
 	// "google.golang.org/grpc"
 )
 
-const weiPerEth = 1e18
-
-// Global variable
-var (
-	// Create bank account
-	bankKey, _  = crypto.GenerateKey()
-	bankAddress = crypto.PubkeyToAddress(bankKey.PublicKey)
-	// Create user account
-	userKey, _  = crypto.GenerateKey()
-	userAddress = crypto.PubkeyToAddress(userKey.PublicKey)
-	// Contract setting, parse from json which is created by hardhat
-	contractAbi, contractBytecode = voucher.LoadContract("../voucher/abi/mutivoucher.json")
-)
-
-// Implements the interface of miner.Backend
-type TestBackend struct {
-	bc     *core.BlockChain
-	txPool *txpool.TxPool
-}
-
-func (m *TestBackend) NetworkId() uint64            { return 0 }
-func (m *TestBackend) BlockChain() *core.BlockChain { return m.bc }
-func (m *TestBackend) TxPool() *txpool.TxPool       { return m.txPool }
-
-// Gensis block
-func genesisBlock(period uint64, gasLimit uint64, faucet common.Address) *core.Genesis {
-	config := *params.AllCliqueProtocolChanges
-	config.Clique = &params.CliqueConfig{
-		Period: period,
-		Epoch:  config.Clique.Epoch,
-	}
-
-	// Assemble and return the genesis with the precompiles and faucet pre-funded
-	return &core.Genesis{
-		Config:     &config,
-		ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
-		GasLimit:   gasLimit,
-		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Difficulty: big.NewInt(1),
-		Alloc: map[common.Address]core.GenesisAccount{
-			faucet:      {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
-			userAddress: {Balance: big.NewInt(1000000)},
-		},
-	}
-}
-
-// Create new blockchain to test
-func newBlockChain() *core.BlockChain {
-	database := rawdb.NewMemoryDatabase()
-	triedb := trie.NewDatabase(database, nil)
-	genesis := genesisBlock(15, 111500000000, bankAddress)
-	chainConfig, _, err := core.SetupGenesisBlock(database, triedb, genesis)
-	if err != nil {
-		fmt.Printf("can't create new chain config: %v\n", err)
-	}
-	engine := clique.New(chainConfig.Clique, database)
-	// Create blockchain
-	bc, err := core.NewBlockChain(database, nil, genesis, nil, engine, vm.Config{}, nil, nil)
-	if err != nil {
-		fmt.Printf("can't create new chain %v\n", err)
-	}
-	return bc
-}
-
-// Create new txpool basing blockchain
-func newTxPool(bc *core.BlockChain) *txpool.TxPool {
-	testTxPoolConfig := legacypool.DefaultConfig
-	pool := legacypool.New(testTxPoolConfig, bc)
-	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), bc, []txpool.SubPool{pool})
-	return txpool
-}
-
-func newEVM(bc *core.BlockChain) *vm.EVM {
-	// Create stateDB
-	header := bc.CurrentBlock()
-	stateDB, err := bc.StateAt(header.Root)
-	if err != nil {
-		fmt.Printf("failed to get stateDB: %v\n", err)
-	}
-	// Create EVM
-	blockContext := core.NewEVMBlockContext(header, bc, nil)
-	evm := vm.NewEVM(blockContext, vm.TxContext{}, stateDB, bc.Config(), vm.Config{})
-	return evm
-}
-
-// Constrcut function to depoly contract
-func newDeployContractTx(bc *core.BlockChain, Nonce int) *types.Transaction {
-	signer := types.LatestSigner(bc.Config())
-	tx0 := types.MustSignNewTx(bankKey, signer, &types.AccessListTx{
-		ChainID:  bc.Config().ChainID,
-		Nonce:    uint64(Nonce),
-		Gas:      1000000000,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-		Data:     common.FromHex(contractBytecode),
-	})
-	return tx0
-}
-
-func newTransaction(bc *core.BlockChain, Nonce int, data []byte) *types.Transaction {
-	// Construct tx.Data
-	fmt.Printf("data: %s\n", hex.EncodeToString(data))
-	signer := types.LatestSigner(bc.Config())
-	tx := types.MustSignNewTx(bankKey, signer, &types.AccessListTx{
-		ChainID:  bc.Config().ChainID,
-		Nonce:    uint64(Nonce),
-		To:       &userAddress,
-		Value:    big.NewInt(0),
-		Gas:      1000000,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-		Data:     data,
-	})
-	return tx
-}
-
-func parseContractAddress(bc *core.BlockChain) *common.Address {
-	latestHeader := bc.CurrentBlock()
-	receipts := bc.GetReceiptsByHash(latestHeader.Hash())
-	if receipts == nil {
-		fmt.Println("no receipts in latest block")
-	} else {
-		for i := range receipts {
-			// Search the receipt which contractAddress is not none
-			if receipts[i].ContractAddress != (common.Address{}) {
-				fmt.Printf("ERC20Address: %v \n", receipts[i].ContractAddress)
-				return &receipts[i].ContractAddress
-			}
-		}
-	}
-	return nil
+func init() {
+	voucher.VoucherMethodInit(contractAbi)
 }
 
 func TestDataStruct(t *testing.T) {
@@ -169,29 +33,19 @@ func TestDataStruct(t *testing.T) {
 }
 
 // Test voucher contract in EVM
-func TestEVMDeploy(t *testing.T) {
-	bc := newBlockChain()
-	txpool := newTxPool(bc)
-	backend := &TestBackend{bc, txpool}
+func TestVoucherWithEVM(t *testing.T) {
+	backend := newTestBackend()
 	// Create Miner
-	minerConfig := miner.Config{Etherbase: common.HexToAddress("123456789")}
-	miner := miner.New(backend, &minerConfig, bc.Config(), new(event.TypeMux), bc.Engine(), nil)
+	miner := backend.CreateMiner()
 	miner.Start()
 	defer miner.Stop()
 	// Attemp to construct transaction
-	tx0 := newDeployContractTx(bc, 0)
-	errs := txpool.Add([]*types.Transaction{tx0}, true, false)
-	t.Logf("tx0 Add to errs: %v\n", errs)
-	// wait for consense
-	time.Sleep(10 * time.Second)
-	// Test contract depolyment
-	ERC20Address := parseContractAddress(bc)
-	if ERC20Address == nil {
-		t.Errorf("Contract address parse fail")
-		t.Fail()
-	}
-	// Test to call contract
-	evm := newEVM(bc)
+	tx0 := newDeployContractTx(backend.bc, 0)
+	backend.AddTx(tx0)
+	// Contract depolyment
+	ERC20Address := backend.parseContractAddress()
+	// Create EVM instance to call contract
+	evm := newEVM(backend.bc)
 	var err error
 	balance := new(big.Int)
 	var flag bool
@@ -212,7 +66,7 @@ func TestEVMDeploy(t *testing.T) {
 		t.Fail()
 	}
 	// Bank use voucher
-	_, err = useMethod.Execute(evm, &flag, &bankAddress, uint256.NewInt(0), voucherName, big.NewInt(1000))
+	_, err = useMethod.Execute(evm, &flag, &bankAddress, uint256.NewInt(0), voucherName, big.NewInt(500))
 	if err != nil {
 		t.Fail()
 	}
@@ -224,7 +78,7 @@ func TestEVMDeploy(t *testing.T) {
 	}
 }
 
-func newTx(bc *core.BlockChain, Nonce int, to *common.Address, value *big.Int, data []byte) *types.Transaction {
+func NewTx(bc *core.BlockChain, Nonce int, to *common.Address, value *big.Int, data []byte) *types.Transaction {
 	// Construct tx.Data
 	signer := types.LatestSigner(bc.Config())
 	tx := types.MustSignNewTx(bankKey, signer, &types.AccessListTx{
@@ -232,6 +86,7 @@ func newTx(bc *core.BlockChain, Nonce int, to *common.Address, value *big.Int, d
 		Nonce:    uint64(Nonce),
 		To:       to,
 		Value:    value,
+		Gas:      63696,
 		GasPrice: big.NewInt(params.InitialBaseFee),
 		Data:     data,
 	})
@@ -239,60 +94,63 @@ func newTx(bc *core.BlockChain, Nonce int, to *common.Address, value *big.Int, d
 }
 
 // Construct TX to test voucher
-func TestTxDeploy(t *testing.T) {
-	bc := newBlockChain()
-	txpool := newTxPool(bc)
-	backend := &TestBackend{bc, txpool}
-	minerConfig := miner.Config{Etherbase: common.HexToAddress("123456789")}
-	miner := miner.New(backend, &minerConfig, bc.Config(), new(event.TypeMux), bc.Engine(), nil)
+func TestVoucherWithTx(t *testing.T) {
+	backend := newTestBackend()
+	miner := backend.CreateMiner()
 	miner.Start()
 	defer miner.Stop()
-	tx0 := newDeployContractTx(bc, 0)
-	errs := txpool.Add([]*types.Transaction{tx0}, true, false)
-	t.Logf("tx0 Add to errs: %v\n", errs)
-	time.Sleep(20 * time.Second)
-	VoucherAddress := parseContractAddress(bc)
-	if VoucherAddress == nil {
-		t.Errorf("Contract address parse fail")
-		t.Fail()
-	}
 
+	tx0 := newDeployContractTx(backend.bc, 0)
+	backend.AddTx(tx0)
+	VoucherAddress := backend.parseContractAddress()
+	// Test to Create voucher
 	convertRate := big.NewInt(1)
 	tokenName := "BitCoin"
-	// Test to Create voucher
 	input, err := contractAbi.Pack("createVoucher", tokenName, convertRate)
 	if err != nil {
 		t.Errorf("err: %v\n", err)
 	}
-	tx1 := newTx(bc, 1, VoucherAddress, big.NewInt(0), input)
-	errs = txpool.Add([]*types.Transaction{tx1}, true, false)
-	t.Logf("tx1 Add to errs: %v\n", errs)
-
+	tx1 := NewTx(backend.bc, 1, VoucherAddress, big.NewInt(0), input)
 	// Test to Buy voucher
 	amount := big.NewInt(1000000000000000000)
 	valueAmount := big.NewInt(1)
 	valueAmount.Mul(amount, convertRate)
-
 	input, err = contractAbi.Pack("buy", tokenName, amount)
 	if err != nil {
 		t.Errorf("err: %v\n", err)
 	}
-	tx2 := newTx(bc, 2, VoucherAddress, valueAmount, input)
-	errs = txpool.Add([]*types.Transaction{tx2}, true, false)
-	t.Logf("tx2 Add to errs: %v\n", errs)
-
+	tx2 := NewTx(backend.bc, 2, VoucherAddress, valueAmount, input)
 	// Construct type of 03 data: identifier + contractAddress + TokenName
 	input2 := []byte{0x0A, 0x0D, 0x03}
 	input2 = append(input2, VoucherAddress[:]...)
-
 	a := make([]byte, hex.EncodedLen(len(tokenName)))
 	hex.Encode(a, []byte(tokenName))
 	input2 = append(input2, a...)
+	tx3 := NewTx(backend.bc, 3, &userAddress, big.NewInt(0), input2)
 
-	tx3 := newTx(bc, 3, &userAddress, big.NewInt(0), input2)
-	errs = txpool.Add([]*types.Transaction{tx3}, true, false)
-	t.Logf("tx3 Add to errs: %v\n", errs)
-	time.Sleep(30 * time.Second)
+	backend.AddTx(tx1)
+	backend.AddTx(tx2)
+	backend.AddTx(tx3)
+}
+
+// Test whether consensus layer can work
+func TestPot(t *testing.T) {
+	backend := newTestBackend()
+	miner := backend.CreateMiner()
+	miner.Start()
+	defer miner.Stop()
+
+	signer := types.LatestSigner(backend.bc.Config())
+	tx := types.MustSignNewTx(bankKey, signer, &types.AccessListTx{
+		ChainID:  backend.bc.Config().ChainID,
+		Nonce:    uint64(0),
+		To:       &userAddress,
+		Value:    big.NewInt(1),
+		Gas:      63696,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
+
+	backend.AddTx(tx)
 }
 
 func TestNormal(t *testing.T) {
@@ -311,20 +169,3 @@ func TestNormal(t *testing.T) {
 	b, _ := hex.DecodeString(a)
 	fmt.Printf("b: %s\n", b)
 }
-
-// // Test whether contracts can be deployed using Genesis Blocks
-// func TestGenesisDeploy(t *testing.T) {
-// 	// Create new blockchain
-// 	bc := newBlockChain()
-// 	evm := newEVM(bc)
-// 	// Test EVM
-// 	input := ERC20.GetEncodedAbi(ERC20.totalSupplySelector, [][]byte{})
-// 	gas := uint64(100000)
-// 	value := uint256.NewInt(0)
-// 	result, _, err := evm.Call(vm.AccountRef(bankAddress), contractAddress, input, gas, value)
-// 	if err != nil {
-// 		t.Errorf("failed to execute EVM contract: %v\n", err)
-// 	} else {
-// 		t.Logf("Result: %x\n", result)
-// 	}
-// }
