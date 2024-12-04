@@ -561,7 +561,7 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 	// Construct the sealing block header.
 
 	// 其实这一段是想区分一下send的时候prepare work还是execution的时候prepare work
-	newDifficulty := big.NewInt(1)
+	_ = big.NewInt(1)
 	newPoWPrice := big.NewInt(0)
 	newGas := uint64(0)
 	newGasNumerator := uint64(0)
@@ -571,10 +571,16 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 	if genParams.isExecution {
 		fmt.Println("parent.AvgRatioNumerator:", parent.AvgRatioNumerator)
 		fmt.Println("parent.AvgRatioDenominator:", parent.AvgRatioDenominator)
-		newDifficulty, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
+		// if parent.AvgRatioDenominator == 0 {
+		// 	parent.AvgRatioDenominator = 1
+		// }
+		_, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
 			genParams.currentRatioNumerator, genParams.txsCount,
 			parent.AvgRatioNumerator, parent.AvgRatioDenominator, parent.PowPrice,
 		)
+		// if parent.AvgGasDenominator == 0 {
+		// 	parent.AvgGasDenominator = 1
+		// }
 		newGas, newGasNumerator, newGasDenominator = e.gasAdaptor.AdjustGas(
 			genParams.currentAveGasNumerator, genParams.txsCount,
 			parent.AvgGasNumerator, parent.AvgGasDenominator,
@@ -588,7 +594,8 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
 		// ! TODO:just for test
-		Difficulty: newDifficulty,
+		// Difficulty: newDifficulty,
+		Difficulty: big.NewInt(1),
 		PowPrice:   newPoWPrice,
 		PowGas:     newGas,
 		// for next block to calculate EMA

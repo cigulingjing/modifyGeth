@@ -126,6 +126,11 @@ func (pa *PoWAdaptor) AdjustParameters(
 		panic("parentPrice cannot be negative")
 	}
 
+	if parentAvgRatioNumerator == 0 && parentAvgRatioDenominator == 0 {
+		// change 0/0 to 0/1
+		parentAvgRatioDenominator = 1
+	}
+
 	// First term: alpha * currentRatio
 	// = (alphaNumerator * currentRatioNumerator) / (alphaDenominator * currentRatioDenominator)
 	term1Num := new(big.Int).Mul(

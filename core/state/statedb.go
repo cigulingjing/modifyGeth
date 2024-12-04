@@ -283,6 +283,7 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *uint256.Int {
+	fmt.Println("GetBalance,", addr)
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -1447,9 +1448,7 @@ func (s *StateDB) CopyOffchainUse() (state *StateDB) {
 
 // security level
 func (s *StateDB) GetSecurityLevel(addr common.Address) uint64 {
-	stateObject := s.getStateObject(addr)
-	fmt.Println("get addr", addr)
-
+	stateObject := s.getOrNewStateObject(addr)
 	if stateObject != nil {
 		return stateObject.SecurityLevel()
 	}

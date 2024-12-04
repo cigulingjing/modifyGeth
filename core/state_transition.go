@@ -222,6 +222,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 	msg.From, err = types.Sender(s, tx)
 	// Set IsPow flag if the transaction is a PoW transaction
 	msg.IsPow = tx.Type() == types.PowTxType
+	fmt.Println("msg.IsPow=", msg.IsPow)
 	return msg, err
 }
 
@@ -681,7 +682,9 @@ func (st *StateTransition) refundGas(refundQuotient uint64) uint64 {
 	remaining := uint256.NewInt(st.gasRemaining)
 	if st.msg.IsPow {
 		// For PoW tx, use PowPrice instead of GasPrice
-		remaining = remaining.Mul(remaining, uint256.MustFromBig(st.evm.Context.PowPrice))
+		st.gp.AddGas(st.gasRemaining)
+		return 0
+
 	} else {
 		remaining = remaining.Mul(remaining, uint256.MustFromBig(st.msg.GasPrice))
 	}

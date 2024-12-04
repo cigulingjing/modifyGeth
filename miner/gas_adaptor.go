@@ -43,6 +43,11 @@ func (ga *GasAdaptor) AdjustGas(
 		panic("parentEMAGasDenominator cannot be zero when parentEMAGasNumerator is not zero")
 	}
 
+	if parentEMAGasNumerator == 0 && parentEMAGasDenominator == 0 {
+		// change 0/0 to 0/1
+		parentEMAGasDenominator = 1
+	}
+
 	// First term: alpha * blockGas
 	// = (alphaNumerator * blockGasNumerator) / (alphaDenominator * blockGasDenominator)
 	term1Num := new(big.Int).Mul(
