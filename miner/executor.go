@@ -908,9 +908,11 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 		}
 
 		from, _ := types.Sender(env.signer, tx)
-		if tx.To().Hex() == ContributionContractAddr && from != e.currenLeader {
-			log.Trace("Ignoring contribution transaction because it is not from current leader", "hash", tx.Hash(), "leader", e.currenLeader)
-			continue
+		if tx.To() != nil {
+			if tx.To().Hex() == ContributionContractAddr && from != e.currenLeader {
+				log.Trace("Ignoring contribution transaction because it is not from current leader", "hash", tx.Hash(), "leader", e.currenLeader)
+				continue
+			}
 		}
 
 		env.state.SetTxContext(tx.Hash(), env.tcount)

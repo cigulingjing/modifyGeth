@@ -365,10 +365,12 @@ func (st *StateTransition) preCheck() error {
 	if fromSL == 0 {
 		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.From.Hex())
 	}
-	toSL := st.state.GetSecurityLevel(*msg.To)
-	fmt.Println("toSL=", toSL)
-	if toSL == 0 {
-		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
+	if msg.To != nil {
+		toSL := st.state.GetSecurityLevel(*msg.To)
+		fmt.Println("toSL=", toSL)
+		if toSL == 0 {
+			return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
+		}
 	}
 
 	if !msg.SkipAccountChecks {
