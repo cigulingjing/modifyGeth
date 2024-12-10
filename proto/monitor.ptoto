@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package monitor;
+option go_package = "./pb";
+
+service CoinMixerMonitor {
+    // 监听转账区消息
+    rpc WatchTransferMessages(TransferMessage) returns (Result) {}
+}
+
+message TransferMessage {
+    string public_key = 1;     // 公钥
+    string key_image = 2;      // keyimage
+}

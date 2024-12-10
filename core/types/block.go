@@ -91,6 +91,11 @@ type Header struct {
 	AvgGasNumerator     uint64   `json:"avgGasNumerator" rlp:"optional"`
 	AvgGasDenominator   uint64   `json:"avgGasDenominator" rlp:"optional"`
 
+	// pos incentives
+	PoSLeader      common.Address `json:"posLeader" rlp:"optional"`
+	PoSVoting      []byte         `json:"posVoting" rlp:"optional"`
+	CommitTxLength uint64         `json:"commitTxLength" rlp:"optional"`
+
 	// tainted transactions address flag
 	Tainted []byte `json:"tainted" rlp:"optional"`
 

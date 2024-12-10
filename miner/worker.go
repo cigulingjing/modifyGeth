@@ -903,6 +903,11 @@ type generateParams struct {
 	currentRatioNumerator  uint64
 	currentAveGasNumerator uint64
 	txsCount               uint64
+
+	// current random number for current block
+	currentRandomNumber *big.Int
+	currentLeader       common.Address
+	votingData          []byte
 }
 
 // prepareWork constructs the sealing task according to the given parameters,

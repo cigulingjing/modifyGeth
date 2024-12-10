@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -28,6 +27,7 @@ import (
 )
 
 const txMaxSize = 4 * 32 * 1024 // 128KB
+const ContributionContractAddr = "0x67fbF000Fc60CBE25D9658D83C5C2506ca323Fdd"
 
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
@@ -41,9 +41,10 @@ type executor_env struct {
 
 	// 最后执行的结束后的结果，有多少tx被包括，他们的收据是什么
 	// 打包区块使用
-	tcount   int
-	txs      types.Transactions
-	receipts []*types.Receipt
+	initTxcount int // 初始收到块时的交易数量
+	tcount      int // 成功执行的交易数量
+	txs         types.Transactions
+	receipts    []*types.Receipt
 }
 
 // copy creates a deep copy of environment.
@@ -66,8 +67,11 @@ func (env *executor_env) copy() *executor_env {
 }
 
 type execReq struct {
-	timestamp int64
-	txs       types.Transactions
+	timestamp    int64
+	txs          types.Transactions
+	leader       common.Address
+	randomNumber *big.Int
+	incentive    []byte
 }
 
 type executorServer struct {
@@ -82,6 +86,24 @@ type executorServer struct {
 // Receive txs from consensus layer
 func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock) (*pb.Empty, error) {
 	fmt.Println("get commit block")
+	// set leader
+	randomNuber := new(big.Int).SetUint64(pbBlock.GetRandomNumber())
+
+	incentiveBytes := pbBlock.GetIncentive()
+	IncentiveData, err := DecodeIncentive(incentiveBytes)
+	if err != nil {
+		log.Warn("decode incentive failed", "err", err)
+		return &pb.Empty{}, nil
+	}
+	// es.executorPtr.currenLeader = common.HexToAddress(IncentiveData.Leader)
+	// log.Info("get leader", "leader", es.executorPtr.currenLeader)
+
+	// // loop to get incentive.NodeIncentives
+	// log.Info("get node incentives", "number", len(IncentiveData.NodeIncentives))
+	// for _, nodeIncentive := range IncentiveData.NodeIncentives {
+	// 	log.Info("get node incentive", "address", nodeIncentive.NodePublicAddress, "type", nodeIncentive.Type, "number", nodeIncentive.Number)
+	// }
+
 	// sharding check
 	sharding, err := hexutil.DecodeUint64(string(pbBlock.ShardingName))
 	if err != nil {
@@ -122,7 +144,15 @@ func (es *executorServer) CommitBlock(ctx context.Context, pbBlock *pb.ExecBlock
 
 	// Receive txs from consensus layer
 	if txs.Len() != 0 {
-		es.executorPtr.execCh <- &execReq{timestamp: time.Now().Unix(), txs: txs}
+		// construct a execReq
+		execreq := &execReq{
+			timestamp:    time.Now().Unix(),
+			txs:          txs,
+			randomNumber: randomNuber,
+			leader:       common.HexToAddress(IncentiveData.Leader),
+			incentive:    incentiveBytes,
+		}
+		es.executorPtr.execCh <- execreq
 	}
 
 	// Check if there are protobuf errors in the consensus block
@@ -252,10 +282,11 @@ type executor struct {
 	execCh     chan *execReq    // received from consensus, and go to execute
 	offChainCh chan bool        //  communicate with WASM
 
-	mu        sync.RWMutex   // The lock used to protect the coinbase
-	coinbase  common.Address // yeah, baby
-	extra     []byte
-	networkId uint64
+	mu           sync.RWMutex   // The lock used to protect the coinbase
+	coinbase     common.Address // yeah, baby
+	currenLeader common.Address // consensus leader
+	extra        []byte
+	networkId    uint64
 
 	// recommit is the time interval to re-create sealing work or to re-build
 	// payload in proof-of-stake stage.
@@ -587,25 +618,29 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		)
 	}
 
-
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     new(big.Int).Add(parent.Number, common.Big1),
 		GasLimit:   core.CalcGasLimit(parent.GasLimit, e.config.GasCeil),
 		Time:       timestamp,
 		Coinbase:   genParams.coinbase,
+		Difficulty: big.NewInt(1),
+		// LeaderAddr: e.currentLeader
 		// ! TODO:just for test
 		// Difficulty: newDifficulty,
-		Difficulty: big.NewInt(1),
-		PowPrice:   newPoWPrice,
-		PowGas:     newGas,
+		PowDifficulty: big.NewInt(1),
+		PowPrice:      newPoWPrice,
+		PowGas:        newGas,
 		// for next block to calculate EMA
 		AvgGasNumerator:     newGasNumerator,
 		AvgGasDenominator:   newGasDenominator,
 		AvgRatioNumerator:   newRatioNumerator,
 		AvgRatioDenominator: newRatioDenominator,
 		// random
-		RandomNumber: big.NewInt(rand.New(rand.NewSource(time.Now().UnixNano())).Int63()),
+		RandomNumber: genParams.currentRandomNumber,
+		// consensus info
+		PoSLeader: genParams.currentLeader,
+		PoSVoting: genParams.votingData,
 	}
 
 	// Set the extra field.
@@ -686,8 +721,9 @@ func (e *executor) sendNewTxBatch(interrupt *atomic.Int32, timestamp int64) {
 	}
 
 	work, err := e.prepareWork(&generateParams{
-		timestamp: uint64(timestamp),
-		coinbase:  coinbase,
+		timestamp:   uint64(timestamp),
+		coinbase:    coinbase,
+		isExecution: false,
 	})
 	if err != nil {
 		return
@@ -794,14 +830,14 @@ func (e *executor) executionLoop() {
 		select {
 		case req := <-e.execCh:
 			// fmt.Println("executionLoop get a execCh and start execute txs")
-			e.executeNewTxBatch(req.timestamp, req.txs)
+			e.executeNewTxBatch(req.timestamp, req.txs, req.leader, req.randomNumber, req.incentive)
 		case <-e.exitCh:
 			return
 		}
 	}
 }
 
-func (e *executor) executeNewTxBatch(timestamp int64, txs types.Transactions) {
+func (e *executor) executeNewTxBatch(timestamp int64, txs types.Transactions, leader common.Address, randomNumber *big.Int, incentiveData []byte) {
 	var coinbase common.Address
 	if e.isRunning() {
 		coinbase = e.etherbase()
@@ -828,6 +864,9 @@ func (e *executor) executeNewTxBatch(timestamp int64, txs types.Transactions) {
 		currentAveGasNumerator: totalGas,
 		txsCount:               uint64(len(txs)),
 		isExecution:            true,
+		currentRandomNumber:    randomNumber,
+		currentLeader:          leader,
+		votingData:             incentiveData,
 	})
 	if err != nil {
 		return
@@ -847,6 +886,8 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 
 	var coalescedLogs []*types.Log
 	// fmt.Println("start exec,txs len:", len((txs)))
+	log.Info("start execute transactions", "receive init txs len:", txs.Len())
+	env.initTxcount = txs.Len()
 	for _, tx := range txs {
 		// If we don't have enough gas for any further transactions then we're done.
 		if env.gasPool.Gas() < params.TxGas {
@@ -867,6 +908,11 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 		}
 
 		from, _ := types.Sender(env.signer, tx)
+		if tx.To().Hex() == ContributionContractAddr && from != e.currenLeader {
+			log.Trace("Ignoring contribution transaction because it is not from current leader", "hash", tx.Hash(), "leader", e.currenLeader)
+			continue
+		}
+
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 		logs, err := e.executeTransaction(env, tx)
 		switch {
@@ -944,8 +990,7 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 	env.txs = append(env.txs, tx)
 	env.receipts = append(env.receipts, receipt)
 	env.tcount++
-	log.Info("exec transaction success")
-	fmt.Println("exec transaction success")
+	log.Info("exec transaction success", "hash", tx.Hash())
 	return receipt.Logs, nil
 }
 
@@ -965,6 +1010,9 @@ func (e *executor) applyTransaction(env *executor_env, tx *types.Transaction) (*
 }
 
 func (e *executor) writeToChain(env *executor_env) error {
+	// 插入header的新数据
+	env.header.CommitTxLength = uint64(env.initTxcount)
+
 	// 组装一个区块
 	block, err := e.engine.FinalizeAndAssemble(e.eth.BlockChain(), env.header, env.state, env.txs, nil, env.receipts, nil)
 	if err != nil {

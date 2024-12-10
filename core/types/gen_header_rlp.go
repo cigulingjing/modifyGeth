@@ -2,6 +2,7 @@
 
 package types
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
@@ -53,14 +54,17 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	_tmp5 := obj.AvgRatioDenominator != 0
 	_tmp6 := obj.AvgGasNumerator != 0
 	_tmp7 := obj.AvgGasDenominator != 0
-	_tmp8 := len(obj.Tainted) > 0
-	_tmp9 := obj.Incentive != nil
-	_tmp10 := obj.BaseFee != nil
-	_tmp11 := obj.WithdrawalsHash != nil
-	_tmp12 := obj.BlobGasUsed != nil
-	_tmp13 := obj.ExcessBlobGas != nil
-	_tmp14 := obj.ParentBeaconRoot != nil
-	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	_tmp8 := obj.PoSLeader != (common.Address{})
+	_tmp9 := len(obj.PoSVoting) > 0
+	_tmp10 := obj.CommitTxLength != 0
+	_tmp11 := len(obj.Tainted) > 0
+	_tmp12 := obj.Incentive != nil
+	_tmp13 := obj.BaseFee != nil
+	_tmp14 := obj.WithdrawalsHash != nil
+	_tmp15 := obj.BlobGasUsed != nil
+	_tmp16 := obj.ExcessBlobGas != nil
+	_tmp17 := obj.ParentBeaconRoot != nil
+	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		if obj.PowDifficulty == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -70,10 +74,10 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBigInt(obj.PowDifficulty)
 		}
 	}
-	if _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteUint64(obj.PowGas)
 	}
-	if _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp3 || _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		if obj.PowPrice == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -83,29 +87,38 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBigInt(obj.PowPrice)
 		}
 	}
-	if _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp4 || _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteUint64(obj.AvgRatioNumerator)
 	}
-	if _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp5 || _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteUint64(obj.AvgRatioDenominator)
 	}
-	if _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp6 || _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteUint64(obj.AvgGasNumerator)
 	}
-	if _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp7 || _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteUint64(obj.AvgGasDenominator)
 	}
-	if _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp8 || _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
+		w.WriteBytes(obj.PoSLeader[:])
+	}
+	if _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
+		w.WriteBytes(obj.PoSVoting)
+	}
+	if _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
+		w.WriteUint64(obj.CommitTxLength)
+	}
+	if _tmp11 || _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		w.WriteBytes(obj.Tainted)
 	}
-	if _tmp9 || _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp12 || _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		if obj.Incentive == nil {
 			w.Write(rlp.EmptyString)
 		} else {
 			w.WriteUint256(obj.Incentive)
 		}
 	}
-	if _tmp10 || _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp13 || _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -115,28 +128,28 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 			w.WriteBigInt(obj.BaseFee)
 		}
 	}
-	if _tmp11 || _tmp12 || _tmp13 || _tmp14 {
+	if _tmp14 || _tmp15 || _tmp16 || _tmp17 {
 		if obj.WithdrawalsHash == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteBytes(obj.WithdrawalsHash[:])
 		}
 	}
-	if _tmp12 || _tmp13 || _tmp14 {
+	if _tmp15 || _tmp16 || _tmp17 {
 		if obj.BlobGasUsed == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteUint64((*obj.BlobGasUsed))
 		}
 	}
-	if _tmp13 || _tmp14 {
+	if _tmp16 || _tmp17 {
 		if obj.ExcessBlobGas == nil {
 			w.Write([]byte{0x80})
 		} else {
 			w.WriteUint64((*obj.ExcessBlobGas))
 		}
 	}
-	if _tmp14 {
+	if _tmp17 {
 		if obj.ParentBeaconRoot == nil {
 			w.Write([]byte{0x80})
 		} else {

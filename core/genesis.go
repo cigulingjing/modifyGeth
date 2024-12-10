@@ -282,7 +282,6 @@ func SetupGenesisBlock(db ethdb.Database, triedb *trie.Database, genesis *Genesi
 }
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, triedb *trie.Database, genesis *Genesis, overrides *ChainOverrides) (*params.ChainConfig, common.Hash, error) {
-	fmt.Println("SetupGenesisBlockWithOverride")
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}

@@ -105,7 +105,6 @@ func newObject(db *StateDB, address common.Address, acct *types.StateAccount) *s
 	if acct == nil {
 		acct = types.NewEmptyStateAccount()
 	}
-	fmt.Println("new sobj", "addr:", address, " security level is", acct.SecurityLevel)
 	return &stateObject{
 		db:             db,
 		address:        address,
