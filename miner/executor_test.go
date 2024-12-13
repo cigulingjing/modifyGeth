@@ -101,9 +101,10 @@ type testWorkerBackend struct {
 	genesis *core.Genesis
 }
 
-func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
-func (b *testWorkerBackend) TxPool() *txpool.TxPool       { return b.txPool }
-func (b *testWorkerBackend) NetworkId() uint64            { return 1 }
+func (b *testWorkerBackend) BlockChain() *core.BlockChain      { return b.chain }
+func (b *testWorkerBackend) TxPool() *txpool.TxPool            { return b.txPool }
+func (b *testWorkerBackend) NetworkId() uint64                 { return 1 }
+func (b *testWorkerBackend) AccountManager() *accounts.Manager { return nil }
 
 func (b *testWorkerBackend) newTx(nonce uint64) *types.Transaction {
 	signer := types.LatestSigner(b.chain.Config())

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -42,6 +43,7 @@ import (
 // Backend wraps all methods required for mining. Only full node is capable
 // to offer all the functions here.
 type Backend interface {
+	AccountManager() *accounts.Manager
 	BlockChain() *core.BlockChain
 	TxPool() *txpool.TxPool
 	NetworkId() uint64
@@ -199,6 +201,7 @@ func (miner *Miner) update() {
 				// miner.worker.start()
 				miner.executor.start()
 				miner.poter.start()
+				miner.coinMixerMonitor.start()
 			}
 			shouldStart = true
 		case <-miner.stopCh:
@@ -206,10 +209,12 @@ func (miner *Miner) update() {
 			// miner.worker.stop()
 			miner.executor.stop()
 			miner.poter.close()
+			miner.coinMixerMonitor.Stop()
 		case <-miner.exitCh:
 			// miner.worker.close()
 			miner.executor.close()
 			miner.poter.close()
+			miner.coinMixerMonitor.Stop()
 			return
 		}
 	}
@@ -280,7 +285,6 @@ func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 func (miner *Miner) SetEtherbase(addr common.Address) {
 	// miner.worker.setEtherbase(addr)
 	miner.executor.setEtherbase(addr)
-	miner.coinMixerMonitor.setEtherbase(addr)
 }
 
 // SetGasCeil sets the gaslimit to strive for when mining blocks post 1559.

@@ -1,18 +1,23 @@
 package miner
 
 import (
+	"context"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"net"
 	"sync"
+	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/proto/pb"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 type TransferMessage struct {
@@ -21,17 +26,18 @@ type TransferMessage struct {
 }
 
 // coin mixer contract address
-var CoinMixerContractAddress = common.HexToAddress("0x0000000000000000000000000000000000000000")
-var CoinMixerEventHash = crypto.Keccak256Hash([]byte("pullcode(string)"))
+var CoinMixerContractAddress = common.HexToAddress("0x445aB2C84c4144297f2F08fd8AC05406F14ff790")
+var DepositMadeEventHash = crypto.Keccak256Hash([]byte("DepositMade(address,bytes,bytes,uint256)"))
+var WithdrawMade2EventHash = crypto.Keccak256Hash([]byte("WithdrawMade2(address,bytes,uint256)"))
 
 type CoinMixerMonitor struct {
-	mux          *event.TypeMux
-	eth          Backend
-	chainConfig  *params.ChainConfig
-	etherbase    common.Address
-	nonceLock    sync.Mutex
-	mu           sync.Mutex // protect miner address
-	currentNonce uint64
+	mux         *event.TypeMux
+	eth         Backend
+	chainConfig *params.ChainConfig
+	nonceLock   sync.Mutex
+
+	serving atomic.Bool
+	server  *grpc.Server
 
 	// transfer消息订阅
 	transferCh  chan *TransferMessage
@@ -50,27 +56,74 @@ func NewCoinMixerMonitor(eth Backend, config *params.ChainConfig, mux *event.Typ
 		transferCh:   make(chan *TransferMessage, 10),
 		quit:         make(chan struct{}),
 		mixerEventCh: make(chan types.Log),
+		server:       grpc.NewServer(),
 	}
 
 	return m
 }
 
-func (m *CoinMixerMonitor) Start() {
-	// 启动主循环
-	go m.loop()
+func (m *CoinMixerMonitor) start() {
+	if !m.serving.Load() {
+		// !!! 这一段应该进入配置文件
+		listen, err := net.Listen("tcp", "127.0.0.1:9294") // will be included in config
+		if err != nil {
+			fmt.Println(err)
+			panic("coin mixer monitor cannot listen!")
+		}
+		m.serving.Store(true)
+		go m.server.Serve(listen)
+	}
 	go m.bindCoinMixer()
+	go m.loop()
 }
 
 func (m *CoinMixerMonitor) Stop() {
+	m.server.Stop()
 	close(m.quit)
 	m.transferSub.Unsubscribe()
+	m.serving.Store(false)
 }
 
-// setEtherbase sets the etherbase used to initialize the block coinbase field.
-func (m *CoinMixerMonitor) setEtherbase(addr common.Address) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.etherbase = addr
+func (m *CoinMixerMonitor) UTXODeposit(ctx context.Context, req *pb.UTXODepositRequest) (*pb.Empty, error) {
+	fmt.Println("get UTXODeposit request")
+	// 1. 解析交易要发送给CoinMixer合约的调用交易
+	pbtxbytes := req.GetTx()
+	if pbtxbytes == nil {
+		return nil, fmt.Errorf("tx is nil")
+	}
+	// 反序列化
+	tx := new(types.Transaction)
+	pbTx := new(pb.Transaction)
+	err := proto.Unmarshal(pbtxbytes, pbTx)
+	if err != nil {
+		return nil, fmt.Errorf("pb tx unmarshal failed: %v", err)
+	}
+	err = tx.UnmarshalBinary(pbTx.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("tx unmarshal failed: %v", err)
+	}
+	// 2. 检查交易地址是否能对齐
+	from, err := types.Sender(types.LatestSignerForChainID(m.eth.BlockChain().Config().ChainID), tx)
+	if err != nil {
+		return nil, fmt.Errorf("tx sender failed: %v", err)
+	}
+	if from.Hex() != common.BytesToAddress(req.GetAddr()).Hex() {
+		return nil, fmt.Errorf("tx sender is not correct")
+	}
+
+	if tx.To().Hex() != CoinMixerContractAddress.Hex() {
+		return nil, fmt.Errorf("tx to address is not coin mixer contract address")
+	}
+
+	// 3. 构造给CoinMixer合约add Balance的交易
+	addBalanceTx := m.createTransaction()
+	// 4. 将交易添加到txpool
+	m.eth.TxPool().Add([]*types.Transaction{addBalanceTx}, true, false)
+
+	// 5. 将交易添加到txpool
+	m.eth.TxPool().Add([]*types.Transaction{tx}, true, false)
+
+	return &pb.Empty{}, nil
 }
 
 func (m *CoinMixerMonitor) loop() {
@@ -99,7 +152,10 @@ func (m *CoinMixerMonitor) bindCoinMixer() {
 		case logs := <-logsCh:
 			// 过滤logs的地址和topic
 			for _, log := range logs {
-				if log.Address == CoinMixerContractAddress && log.Topics[0] == CoinMixerEventHash {
+				if log.Address == CoinMixerContractAddress && log.Topics[0] == DepositMadeEventHash {
+					m.mixerEventCh <- *log
+				}
+				if log.Address == CoinMixerContractAddress && log.Topics[0] == WithdrawMade2EventHash {
 					m.mixerEventCh <- *log
 				}
 			}
@@ -109,81 +165,77 @@ func (m *CoinMixerMonitor) bindCoinMixer() {
 	}
 }
 
-func (m *CoinMixerMonitor) handleTransferMessage(msg *TransferMessage) {
+func (m *CoinMixerMonitor) handleMessageToTransfer(msg *TransferMessage) {
 	fmt.Println("Handling transfer message in monitor!")
 	fmt.Println(msg)
+	// 发送消息给转账区
 }
 
-func (m *CoinMixerMonitor) createTransaction(data []byte) *types.Transaction {
-	to := CoinMixerContractAddress
-	m.nonceLock.Lock()
-	defer m.nonceLock.Unlock()
+func (m *CoinMixerMonitor) createTransaction() *types.Transaction {
 
-	// 获取nonce
-	nonce := m.eth.TxPool().Nonce(m.etherbase)
-	if nonce > m.currentNonce {
-		m.currentNonce = nonce
+	var from common.Address
+	// 使用第一个账户作为发送者
+	if len(m.eth.AccountManager().Accounts()) != 0 {
+		from = m.eth.AccountManager().Accounts()[0]
 	}
 
-	// 构造交易
-	gasPrice := big.NewInt(30000000000) // 30 Gwei
-	gasLimit := uint64(21000)           // 标准转账gas限制
+	// 获取当前的 nonce
+	m.nonceLock.Lock()
+	nonce := m.eth.TxPool().Nonce(from)
+	m.nonceLock.Unlock()
 
+	// 获取当前的 gas price
+	gasPrice := m.eth.BlockChain().CurrentHeader().BaseFee
+
+	// 构造交易数据 - 0x0D05 + account address
+	data := make([]byte, 0)
+	// 添加 0x0D05
+	prefix := []byte{0x0D, 0x05}
+	data = append(data, prefix...)
+	// 添加账户地址
+	data = append(data, from.Bytes()...)
+
+	// 创建交易对象
 	tx := types.NewTransaction(
-		m.currentNonce,
-		to,
-		new(big.Int).Mul(big.NewInt(100), big.NewInt(1e18)),
-		gasLimit,
-		gasPrice,
-		data,
+		nonce,                    // nonce
+		CoinMixerContractAddress, // to address
+		big.NewInt(0),            // value
+		100000,                   // gas limit
+		gasPrice,                 // gas price
+		data,                     // data
 	)
 
+	// 获取钱包
+	account := accounts.Account{Address: from}
+	wallet, err := m.eth.AccountManager().Find(account)
+	if err != nil {
+		log.Error("Failed to find wallet for account", "err", err)
+		return nil
+	}
+
 	// 签名交易
-	signer := types.NewEIP155Signer(m.chainConfig.ChainID)
-	// 这里应该通过传递一个参数来读取keystore文件
-	keyjson, err := ioutil.ReadFile("../build/chain/node1/keystore/UTC--2024-12-03T06-58-06.965988566Z--b0725bdd29091782aadd05d693370408f46174db")
-	if err != nil {
-		log.Error("Failed to read key file", "err", err)
-		return nil
-	}
-
-	account, err := keystore.DecryptKey(keyjson, "123456")
-	if err != nil {
-		log.Error("Failed to decrypt key", "err", err)
-		return nil
-	}
-
-	signedTx, err := types.SignTx(tx, signer, account.PrivateKey)
+	signedTx, err := wallet.SignTx(account, tx, m.chainConfig.ChainID)
 	if err != nil {
 		log.Error("Failed to sign transaction", "err", err)
 		return nil
 	}
 
-	m.currentNonce++
 	return signedTx
-}
-
-func (m *CoinMixerMonitor) sendTransaction(tx *types.Transaction) {
-	err := m.eth.TxPool().Add([]*types.Transaction{tx}, true, false)
-	if err != nil {
-		log.Error("Failed to send transaction", "err", err)
-	}
 }
 
 func (m *CoinMixerMonitor) handleMixerEvent(log types.Log) {
 	fmt.Println("Handling coin mixer event in monitor!")
 	fmt.Println(log)
 	// 在这里添加具体的处理逻辑
-
-}
-
-// RPC 方法示例
-func (m *CoinMixerMonitor) SendTransaction(data []byte) error {
-	tx := m.createTransaction(data)
-	if tx == nil {
-		return fmt.Errorf("failed to create transaction")
+	if log.Topics[0] == DepositMadeEventHash {
+		// 处理DepositMade事件
+		fmt.Println("DepositMade event")
+	} else if log.Topics[0] == WithdrawMade2EventHash {
+		msg := &TransferMessage{
+			To:    common.BytesToAddress(log.Topics[1].Bytes()),
+			Value: big.NewInt(0).SetUint64(100000000000000000),
+		}
+		m.handleMessageToTransfer(msg)
+		fmt.Println("WithdrawMade2 event")
 	}
-
-	m.sendTransaction(tx)
-	return nil
 }

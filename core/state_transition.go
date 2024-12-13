@@ -502,6 +502,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		}, nil
 	}
 
+	if isCoinMixerAddBalanceTx(st.msg) {
+		log.Info("CoinMixer add balance transaction", "from", st.msg.From.Hex())
+		// 加0.1 ethers
+		st.state.AddBalance(*st.msg.To, uint256.NewInt(0).SetUint64(100000000000000000))
+		return &ExecutionResult{
+			UsedGas:     st.gasUsed(),
+			RefundedGas: 0,
+			Err:         nil,
+			ReturnData:  nil,
+		}, nil
+	}
+
 	if isPUNKTaintedLockTx(st.msg) {
 		log.Info("PUNKTaintedLock transaction", "from", st.msg.From.Hex())
 
@@ -710,17 +722,6 @@ func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
 
-// isCoinBaseTx checks if the transaction is a pangu coinbase transaction.
-func isCoinBaseTx(msg *Message) bool {
-	if msg.Data == nil || len(msg.Data) < 3 {
-		return false
-	}
-	if msg.Data[0] == 0x0D && msg.Data[1] == 0x01 {
-		return true
-	}
-	return false
-}
-
 func isTokenTransition(msg *Message) bool {
 	if msg.Data == nil || len(msg.Data) < 3 {
 		return false
@@ -746,6 +747,23 @@ func isPUNKTaintedUnlockTx(msg *Message) bool {
 		return false
 	}
 	if msg.Data[0] == 0x0D && msg.Data[1] == 0x04 {
+		return true
+	}
+	return false
+}
+
+const CoinMixerAddr = "0x445aB2C84c4144297f2F08fd8AC05406F14ff790"
+
+func isCoinMixerAddBalanceTx(msg *Message) bool {
+	if msg.Data == nil || len(msg.Data) < 3 {
+		return false
+	}
+	if msg.To != nil {
+		if msg.To.Hex() == CoinMixerAddr {
+			return true
+		}
+	}
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x05 {
 		return true
 	}
 	return false
