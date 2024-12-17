@@ -131,7 +131,12 @@ func lookupCodeInfo(client client, name string) *codeInfo {
 
 // Check whether is callFunc in codestorage contract
 func IsUpgradeAlgorithm(addr common.Address, funcSelector []byte) bool {
-	return addr == CodeStorageAddress && bytes.Equal(CodeStorageABI.Methods["callFunc"].ID, funcSelector)
+	if len(funcSelector) < 4 {
+		return false
+	} else {
+		funcSelector = funcSelector[:4]
+		return addr == CodeStorageAddress && bytes.Equal(CodeStorageABI.Methods["callFunc"].ID, funcSelector)
+	}
 }
 
 func convertBytesToString(array [][10]byte) []string {

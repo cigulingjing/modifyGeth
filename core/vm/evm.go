@@ -250,7 +250,7 @@ func (evm *EVM) Call(caller ContractRef, addr common.Address, input []byte, gas 
 
 	if isPrecompile {
 		ret, gas, err = RunPrecompiledContract(p, input, gas, evm.Context)
-	} else if cryptoupgrade.IsUpgradeAlgorithm(addr, input[:4]) {
+	} else if cryptoupgrade.IsUpgradeAlgorithm(addr, input) {
 		callFuncParam := cryptoupgrade.UnpackCall(input)
 		algorithmName := callFuncParam[0].(string)
 		algorithmParams := callFuncParam[1].([]byte)
