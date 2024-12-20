@@ -900,9 +900,8 @@ type generateParams struct {
 	isExecution bool
 	// The PoW transaction ratio of the current block
 	// if currentPowRatio < 0, if means we do not refer to this field
-	currentRatioNumerator  uint64
-	currentAveGasNumerator uint64
-	txsCount               uint64
+	currentRatio    *common.Rational
+	currentGasRatio *common.Rational
 }
 
 // prepareWork constructs the sealing task according to the given parameters,

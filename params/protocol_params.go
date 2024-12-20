@@ -188,4 +188,19 @@ var (
 	BeaconRootsStorageAddress = common.HexToAddress("0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02")
 	// SystemAddress is where the system-transaction is sent from as per EIP-4788
 	SystemAddress common.Address = common.HexToAddress("0xfffffffffffffffffffffffffffffffffffffffe")
+
+	// newly added params here
+	ModHeight         uint64 = 100
+	InitialDifficulty        = big.NewInt(100)
+	TargetPowRatio           = common.NewRational(3, 10)
+	MinPowGas         uint64 = 1000000
+	InitialGas        uint64 = 10000000
+	MaxPowGas         uint64 = 100000000
+	MinPrice                 = big.NewInt(100)
+	MaxPrice                 = big.NewInt(10000)
+	Alpha                    = common.NewRational(1, 2)
+	Fmin                     = common.NewRational(4, 5)
+	Fmax                     = common.NewRational(6, 5)
+	Kp                       = common.NewRational(1, 10)
+	Ki                       = common.NewRational(1, 100)
 )

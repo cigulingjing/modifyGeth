@@ -56,6 +56,13 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		if !valid {
 			return fmt.Errorf("pow hash verification failed")
 		}
+		heightValid, err := types.VerifyTxHeight(tx, head.Number.Uint64(), params.ModHeight)
+		if err != nil {
+			return fmt.Errorf("height verification error: %v", err)
+		}
+		if !heightValid {
+			return fmt.Errorf("transaction height requirement not met")
+		}
 	}
 	// Ensure transactions not implemented by the calling pool are rejected
 	if opts.Accept&(1<<tx.Type()) == 0 {

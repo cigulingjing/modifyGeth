@@ -46,9 +46,10 @@ type txJSON struct {
 	R                    *hexutil.Big    `json:"r"`
 	S                    *hexutil.Big    `json:"s"`
 	YParity              *hexutil.Uint64 `json:"yParity,omitempty"`
-	HashNonce            *hexutil.Uint64 `json:"hashNonce,omitempty"` // New field for PowTx
-	CryptoType           *hexutil.Bytes  `json:"cryptoType"`          // New field for DynamicCryptoTx
-	SignatureData        *hexutil.Bytes  `json:"signatureData"`       // New field for DynamicCryptoTx
+	HashNonce            *hexutil.Uint64 `json:"hashNonce,omitempty"`   // New field for PowTx
+	StartHeight          *hexutil.Uint64 `json:"startHeight,omitempty"` // New field for PowTx
+	CryptoType           *hexutil.Bytes  `json:"cryptoType"`            // New field for DynamicCryptoTx
+	SignatureData        *hexutil.Bytes  `json:"signatureData"`         // New field for DynamicCryptoTx
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
@@ -160,6 +161,7 @@ func (tx *Transaction) MarshalJSON() ([]byte, error) {
 		enc.R = (*hexutil.Big)(itx.R)
 		enc.S = (*hexutil.Big)(itx.S)
 		enc.HashNonce = (*hexutil.Uint64)(&itx.HashNonce)
+		enc.StartHeight = (*hexutil.Uint64)(&itx.StartHeight)
 		yparity := itx.V.Uint64()
 		enc.YParity = (*hexutil.Uint64)(&yparity)
 
@@ -478,6 +480,10 @@ func (tx *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'hashNonce' in transaction")
 		}
 		itx.HashNonce = uint64(*dec.HashNonce)
+		if dec.StartHeight == nil {
+			return errors.New("missing required field 'startHeight' in transaction")
+		}
+		itx.StartHeight = uint64(*dec.StartHeight)
 
 		itx.V = (*big.Int)(dec.V)
 		itx.R = (*big.Int)(dec.R)

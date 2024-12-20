@@ -731,3 +731,201 @@ func TestDynamicCryptoTx(t *testing.T) {
 	})
 
 }
+
+func TestPowTxWithHeight(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	powTx := &PowTx{
+		ChainID:     big.NewInt(1),
+		Nonce:       123,
+		GasTipCap:   big.NewInt(1),
+		GasFeeCap:   big.NewInt(200),
+		Gas:         50000,
+		To:          &addr,
+		Value:       big.NewInt(1000),
+		Data:        []byte{},
+		AccessList:  AccessList{},
+		HashNonce:   456,
+		StartHeight: 1000, // 设置起始高度
+		V:           big.NewInt(0),
+		R:           big.NewInt(0),
+		S:           big.NewInt(0),
+	}
+
+	t.Run("Encoding and Decoding with StartHeight", func(t *testing.T) {
+		tx := NewTx(powTx)
+		encodedTx, err := rlp.EncodeToBytes(tx)
+		if err != nil {
+			t.Fatalf("Failed to encode tx: %v", err)
+		}
+
+		var decodedTx Transaction
+		err = rlp.DecodeBytes(encodedTx, &decodedTx)
+		if err != nil {
+			t.Fatalf("Failed to decode tx: %v", err)
+		}
+
+		decodedPowTx, ok := decodedTx.inner.(*PowTx)
+		if !ok {
+			t.Fatalf("Decoded transaction is not a PowTx")
+		}
+
+		if decodedPowTx.StartHeight != powTx.StartHeight {
+			t.Errorf("StartHeight mismatch: got %d, want %d",
+				decodedPowTx.StartHeight, powTx.StartHeight)
+		}
+	})
+
+	t.Run("Height Verification", func(t *testing.T) {
+		tx := NewTx(powTx)
+
+		testCases := []struct {
+			currentHeight uint64
+			modHeight     uint64
+			wantValid     bool
+			wantErr       bool
+		}{
+			{1000, 100, false, false}, // 刚好等于StartHeight
+			{1200, 100, true, false},  // 足够高
+			{900, 100, false, false},  // 太低
+			{1000, 0, false, true},    // 无效的modHeight
+		}
+
+		for _, tc := range testCases {
+			valid, err := VerifyTxHeight(tx, tc.currentHeight, tc.modHeight)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("VerifyTxHeight() error = %v, wantErr %v", err, tc.wantErr)
+				continue
+			}
+			if valid != tc.wantValid {
+				t.Errorf("VerifyTxHeight() = %v, want %v", valid, tc.wantValid)
+			}
+		}
+	})
+
+	t.Run("Hash Calculation", func(t *testing.T) {
+		tx1 := NewTx(powTx)
+		hash1 := tx1.Hash()
+
+		// 修改StartHeight后hash应该改变
+		powTx.StartHeight = 2000
+		tx2 := NewTx(powTx)
+		hash2 := tx2.Hash()
+
+		if hash1 == hash2 {
+			t.Error("Hash should change when StartHeight changes")
+		}
+	})
+}
+
+func TestPowTxSerialization(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	signer := LatestSignerForChainID(big.NewInt(1))
+
+	testCases := []struct {
+		name        string
+		startHeight uint64
+	}{
+		{"Zero StartHeight", 0},
+		{"Normal StartHeight", 1000},
+		{"Large StartHeight", ^uint64(0)}, // max uint64
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			powTx := &PowTx{
+				ChainID:     big.NewInt(1),
+				Nonce:       123,
+				GasTipCap:   big.NewInt(1),
+				GasFeeCap:   big.NewInt(200),
+				Gas:         50000,
+				To:          &addr,
+				Value:       big.NewInt(1000),
+				Data:        []byte{},
+				AccessList:  AccessList{},
+				HashNonce:   456,
+				StartHeight: tc.startHeight,
+			}
+
+			tx := NewTx(powTx)
+			signedTx, err := SignTx(tx, signer, key)
+			if err != nil {
+				t.Fatalf("Failed to sign tx: %v", err)
+			}
+
+			// Test RLP encoding/decoding
+			t.Run("RLP", func(t *testing.T) {
+				encoded, err := rlp.EncodeToBytes(signedTx)
+				if err != nil {
+					t.Fatalf("Failed to RLP encode: %v", err)
+				}
+
+				var decoded Transaction
+				err = rlp.DecodeBytes(encoded, &decoded)
+				if err != nil {
+					t.Fatalf("Failed to RLP decode: %v", err)
+				}
+
+				decodedPow, ok := decoded.inner.(*PowTx)
+				if !ok {
+					t.Fatal("Decoded transaction is not a PowTx")
+				}
+
+				if decodedPow.StartHeight != tc.startHeight {
+					t.Errorf("RLP: StartHeight mismatch: got %d, want %d",
+						decodedPow.StartHeight, tc.startHeight)
+				}
+			})
+
+			// Test JSON encoding/decoding
+			t.Run("JSON", func(t *testing.T) {
+				encoded, err := json.Marshal(signedTx)
+				if err != nil {
+					t.Fatalf("Failed to JSON marshal: %v", err)
+				}
+
+				var decoded Transaction
+				err = json.Unmarshal(encoded, &decoded)
+				if err != nil {
+					t.Fatalf("Failed to JSON unmarshal: %v", err)
+				}
+
+				decodedPow, ok := decoded.inner.(*PowTx)
+				if !ok {
+					t.Fatal("Decoded transaction is not a PowTx")
+				}
+
+				if decodedPow.StartHeight != tc.startHeight {
+					t.Errorf("JSON: StartHeight mismatch: got %d, want %d",
+						decodedPow.StartHeight, tc.startHeight)
+				}
+			})
+
+			// Test MarshalBinary/UnmarshalBinary
+			t.Run("Binary", func(t *testing.T) {
+				encoded, err := signedTx.MarshalBinary()
+				if err != nil {
+					t.Fatalf("Failed to marshal binary: %v", err)
+				}
+
+				var decoded Transaction
+				err = decoded.UnmarshalBinary(encoded)
+				if err != nil {
+					t.Fatalf("Failed to unmarshal binary: %v", err)
+				}
+
+				decodedPow, ok := decoded.inner.(*PowTx)
+				if !ok {
+					t.Fatal("Decoded transaction is not a PowTx")
+				}
+
+				if decodedPow.StartHeight != tc.startHeight {
+					t.Errorf("Binary: StartHeight mismatch: got %d, want %d",
+						decodedPow.StartHeight, tc.startHeight)
+				}
+			})
+		})
+	}
+}

@@ -2168,3 +2168,68 @@ func checkTxFee(gasPrice *big.Int, gas uint64, cap float64) error {
 	}
 	return nil
 }
+
+// SendPowTransaction creates a transaction for the given argument, sign it and submit it to the
+// transaction pool. The transaction will be a POW transaction that satisfies the network difficulty.
+func (s *TransactionAPI) SendPowTransaction(ctx context.Context, args TransactionArgs) (common.Hash, error) {
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: args.from()}
+
+	wallet, err := s.b.AccountManager().Find(account)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if args.Nonce == nil {
+		s.nonceLock.LockAddr(args.from())
+		defer s.nonceLock.UnlockAddr(args.from())
+	}
+
+	// Set some sanity defaults and terminate on failure
+	if err := args.setDefaults(ctx, s.b); err != nil {
+		return common.Hash{}, err
+	}
+
+	// Get current header for difficulty
+	header := s.b.CurrentHeader()
+	if header == nil {
+		return common.Hash{}, errors.New("current header not found")
+	}
+
+	// Create a POW transaction
+	tx := args.toTransaction()
+	powTx := &types.PowTx{
+		ChainID:    tx.ChainId(),
+		Nonce:      tx.Nonce(),
+		GasTipCap:  tx.GasTipCap(),
+		GasFeeCap:  tx.GasFeeCap(),
+		Gas:        tx.Gas(),
+		To:         tx.To(),
+		Value:      tx.Value(),
+		Data:       tx.Data(),
+		AccessList: tx.AccessList(),
+	}
+
+	// Try different HashNonce values until we find one that satisfies the difficulty
+	var hashNonce uint64
+	for {
+		powTx.HashNonce = hashNonce
+		wrappedTx := types.NewTx(powTx)
+		valid, _ := types.VerifyTxWithDifficulty(wrappedTx, header.Difficulty)
+		if valid {
+			break
+		}
+		hashNonce++
+		if hashNonce > math.MaxUint64-1000 { // Prevent infinite loop
+			return common.Hash{}, errors.New("failed to find valid POW nonce")
+		}
+	}
+
+	// Sign the transaction
+	signed, err := wallet.SignTx(account, types.NewTx(powTx), s.b.ChainConfig().ChainID)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return SubmitTransaction(ctx, s.b, signed)
+}

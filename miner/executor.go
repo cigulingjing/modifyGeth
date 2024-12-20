@@ -271,6 +271,8 @@ type executor struct {
 	// priceAdaptor      *PriceAdaptor
 	powAdaptor *PoWAdaptor
 	gasAdaptor *GasAdaptor
+
+	planPool *core.PlanPool
 }
 
 // newExecutor creates a new executor.
@@ -311,23 +313,23 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 
 		// TODO: 添加调整器
 		gasAdaptor: NewGasAdaptor(
-			1000000,  // minGas: 最小 gas 限制
-			30000000, // maxGas: 最大 gas 限制，与 DefaultConfig.GasCeil 保持一致
-			8000000,  // initialGas: 初始 gas 限制
-			3,        // alphaNumerator: EMA 平滑因子分子，表示新数据占 30% 权重
-			10,       // alphaDenominator: EMA 平滑因子分母
+			params.MinPowGas,  // minGas: 最小 gas 限制
+			params.MaxPowGas,  // maxGas: 最大 gas 限制，与 DefaultConfig.GasCeil 保持一致
+			params.InitialGas, // initialGas: 初始 gas 限制
+			params.Alpha,      // alpha: EMA 平滑因子为 0.2
 		),
 		powAdaptor: NewPoWAdaptor(
-			3, 10, // targetPowRatio: 目标 PoW 交易比例为 30%
-			2, 10, // alpha: EMA 平滑因子为 0.2
-			8, 10, // fMin: 最小调整因子为 0.8
-			12, 10, // fMax: 最大调整因子为 1.2
-			big.NewInt(1000000), // initialDifficulty: 初始难度
-			1, 10,               // kp: 比例调节系数为 0.1
-			1, 100, // ki: 积分调节系数为 0.01
-			big.NewInt(100),   // minPrice: 最小价格
-			big.NewInt(10000), // maxPrice: 最大价格
+			params.TargetPowRatio,    // targetPowRatio: 目标 PoW 交易比例为 30%
+			params.Alpha,             // alpha: EMA 平滑因子为 0.2
+			params.Fmin,              // fMin: 最小调整因子为 0.8
+			params.Fmax,              // fMax: 最大调整因子为 1.2
+			params.InitialDifficulty, // initialDifficulty: 初始难度
+			params.Kp,                // kp: 比例调节系数为 0.1
+			params.Ki,                // ki: 积分调节系数为 0.01
+			params.MinPrice,          // minPrice: 最小价格
+			params.MaxPrice,          // maxPrice: 最大价格
 		),
+		planPool: core.NewPlanPool(), // TODO: add plans
 	}
 
 	// Subscribe events for blockchain
@@ -463,7 +465,7 @@ func (e *executor) setRecommitInterval(interval time.Duration) {
 // 	e.snapshotState = env.state.Copy()
 // }
 
-// 缺少启动用的循环newWorkLoop
+// 缺少启动用循环newWorkLoop
 // newExecLoop
 func (e *executor) newExecLoop(recommit time.Duration) {
 	defer e.wg.Done()
@@ -504,7 +506,7 @@ func (e *executor) newExecLoop(recommit time.Duration) {
 	// }
 
 	// 逻辑大概是启动的时候发一个信号开启sendloop，然后每隔recommit时间发一个信号启动sendloop（1秒一次）
-	// 比较担心的是这些interrupt的处理，不知道是不是会有问题
+	// 比较担心的是这些interrupt的处理，不知道是不是有
 	for {
 		select {
 		case <-e.startCh:
@@ -558,63 +560,55 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 		}
 		timestamp = parent.Time + 1
 	}
-	// Construct the sealing block header.
 
-	// 其实这一段是想区分一下send的时候prepare work还是execution的时候prepare work
-	_ = big.NewInt(1)
+	// TODO: Havn't test yet.
+	nextPlanHeight := e.planPool.GetMinHeight()
+	if parent.Number.Uint64()+1 == nextPlanHeight {
+		e.ExecuteAndRemovePlan(nextPlanHeight)
+	}
+
 	newPoWPrice := big.NewInt(0)
 	newGas := uint64(0)
 	newGasNumerator := uint64(0)
 	newGasDenominator := uint64(0)
 	newRatioNumerator := uint64(0)
 	newRatioDenominator := uint64(0)
+
 	if genParams.isExecution {
-		fmt.Println("parent.AvgRatioNumerator:", parent.AvgRatioNumerator)
-		fmt.Println("parent.AvgRatioDenominator:", parent.AvgRatioDenominator)
-		// if parent.AvgRatioDenominator == 0 {
-		// 	parent.AvgRatioDenominator = 1
-		// }
+		// Adjust PoW parameters
 		_, newPoWPrice, newRatioNumerator, newRatioDenominator = e.powAdaptor.AdjustParameters(
-			genParams.currentRatioNumerator, genParams.txsCount,
-			parent.AvgRatioNumerator, parent.AvgRatioDenominator, parent.PowPrice,
+			genParams.currentRatio,
+			common.NewRational(parent.AvgRatioNumerator, parent.AvgRatioDenominator),
+			parent.PowPrice,
 		)
-		// if parent.AvgGasDenominator == 0 {
-		// 	parent.AvgGasDenominator = 1
-		// }
+
+		// Adjust gas parameters
 		newGas, newGasNumerator, newGasDenominator = e.gasAdaptor.AdjustGas(
-			genParams.currentAveGasNumerator, genParams.txsCount,
-			parent.AvgGasNumerator, parent.AvgGasDenominator,
+			genParams.currentGasRatio,
+			common.NewRational(parent.AvgGasNumerator, parent.AvgGasDenominator),
 		)
 	}
 
-
 	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     new(big.Int).Add(parent.Number, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent.GasLimit, e.config.GasCeil),
-		Time:       timestamp,
-		Coinbase:   genParams.coinbase,
-		// ! TODO:just for test
-		// Difficulty: newDifficulty,
-		Difficulty: big.NewInt(1),
-		PowPrice:   newPoWPrice,
-		PowGas:     newGas,
-		// for next block to calculate EMA
+		ParentHash:          parent.Hash(),
+		Number:              new(big.Int).Add(parent.Number, common.Big1),
+		GasLimit:            core.CalcGasLimit(parent.GasLimit, e.config.GasCeil),
+		Time:                timestamp,
+		Coinbase:            genParams.coinbase,
+		Difficulty:          big.NewInt(1),
+		PowPrice:            newPoWPrice,
+		PowGas:              newGas,
 		AvgGasNumerator:     newGasNumerator,
 		AvgGasDenominator:   newGasDenominator,
 		AvgRatioNumerator:   newRatioNumerator,
 		AvgRatioDenominator: newRatioDenominator,
-		// random
-		RandomNumber: big.NewInt(rand.New(rand.NewSource(time.Now().UnixNano())).Int63()),
+		RandomNumber:        big.NewInt(rand.New(rand.NewSource(time.Now().UnixNano())).Int63()),
 	}
 
-	// Set the extra field.
 	if len(e.extra) != 0 {
-		// fmt.Println("executor hearder extra len:", len(e.extra))
 		header.Extra = e.extra
 	}
 
-	// Adding EIP 1559 logic
 	if e.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = eip1559.CalcBaseFee(e.chainConfig, parent)
 		if !e.chainConfig.IsLondon(parent.Number) {
@@ -622,9 +616,7 @@ func (e *executor) prepareWork(genParams *generateParams) (*executor_env, error)
 			header.GasLimit = core.CalcGasLimit(parentGasLimit, e.config.GasCeil)
 		}
 	}
-	// Could potentially happen if starting to mine in an odd state.
-	// Note genParams.coinbase can be different with header.Coinbase
-	// since clique algorithm can modify the coinbase field in header.
+
 	env, err := e.makeEnv(parent, header, genParams.coinbase)
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
@@ -810,32 +802,40 @@ func (e *executor) executeNewTxBatch(timestamp int64, txs types.Transactions) {
 			return
 		}
 	}
-	// count the currentPowRatio
-	count := uint64(0)
+
+	// Count PoW transactions and total gas
+	powCount := uint64(0)
 	totalGas := uint64(0)
-	if len(txs) > 0 {
+	txCount := uint64(len(txs))
+
+	if txCount > 0 {
 		for _, tx := range txs {
 			if tx.Type() == types.PowTxType {
-				count++
+				powCount++
 			}
 			totalGas += tx.Gas()
 		}
 	}
+
 	work, err := e.prepareWork(&generateParams{
-		timestamp:              uint64(timestamp), // ...
-		coinbase:               coinbase,
-		currentRatioNumerator:  count,
-		currentAveGasNumerator: totalGas,
-		txsCount:               uint64(len(txs)),
-		isExecution:            true,
+		timestamp: uint64(timestamp),
+		coinbase:  coinbase,
+		currentRatio: &common.Rational{
+			Numerator:   powCount,
+			Denominator: txCount,
+		},
+		currentGasRatio: &common.Rational{
+			Numerator:   totalGas,
+			Denominator: txCount,
+		},
+		isExecution: true,
 	})
 	if err != nil {
 		return
 	}
-	// fmt.Println("tx to:", txs[0].To())
-	// fmt.Println("tx hash", txs[0].Hash())
-	e.executeTransactions(work, txs) // logs may be needed by other modules
-	e.writeToChain(work)             // 写入区块链，后续可以流水线化
+
+	e.executeTransactions(work, txs)
+	e.writeToChain(work)
 }
 
 // 串行地执行交易，会返回一个Logs，或许以后会有用
@@ -890,7 +890,7 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 	return coalescedLogs
 }
 
-// 看看交易执行成功没有，如果成功把它收集进Env里
+// 看看交易行成功没有，如果成功把它收集进Env里
 func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) ([]*types.Log, error) {
 	// TODO : send to transfer
 	if tx.Data() == nil {
@@ -1022,4 +1022,39 @@ func isTokenTransition(tx *types.Transaction) bool {
 		return true
 	}
 	return false
+}
+
+func (e *executor) ExecuteAndRemovePlan(height uint64) error {
+	// Get merged plan from pool
+	mergedPlan := e.planPool.MergePlans(height)
+	if mergedPlan == nil {
+		return nil
+	}
+
+	// Update parameters
+	e.planPool.UpdateParams(mergedPlan)
+
+	// Recreate adaptors with new parameters
+	e.powAdaptor = NewPoWAdaptor(
+		params.TargetPowRatio,
+		params.Alpha,
+		params.Fmin,
+		params.Fmax,
+		params.InitialDifficulty,
+		params.Kp,
+		params.Ki,
+		params.MinPrice,
+		params.MaxPrice,
+	)
+
+	e.gasAdaptor = NewGasAdaptor(
+		params.MinPowGas,
+		params.MaxPowGas,
+		params.InitialGas,
+		params.Alpha,
+	)
+
+	e.planPool.RemovePlan(height)
+
+	return nil
 }
