@@ -360,16 +360,18 @@ func (st *StateTransition) preCheck() error {
 	msg := st.msg
 	// check address is locked?(it means the account sercurity level is 0)
 	// ! Account lock
-	// fromSL := st.state.GetSecurityLevel(msg.From)
-	// fmt.Println("fromSL=", fromSL)
-	// if fromSL == 0 {
-	// 	return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.From.Hex())
-	// }
-	// toSL := st.state.GetSecurityLevel(*msg.To)
-	// fmt.Println("toSL=", toSL)
-	// if toSL == 0 {
-	// 	return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
-	// }
+	fromSL := st.state.GetSecurityLevel(msg.From)
+	fmt.Println("fromSL=", fromSL)
+	if fromSL == 0 {
+		return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.From.Hex())
+	}
+	if msg.To != nil {
+		toSL := st.state.GetSecurityLevel(*msg.To)
+		fmt.Println("toSL=", toSL)
+		if toSL == 0 {
+			return fmt.Errorf("%w: address %v, account is locked", ErrAccountLocked, msg.To.Hex())
+		}
+	}
 
 	if !msg.SkipAccountChecks {
 		// Make sure this transaction's nonce is correct.
@@ -492,6 +494,18 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if isTokenTransition(st.msg) {
 		log.Info("Token transition transaction", "to", st.msg.To.Hex(), "value", st.msg.Value)
 		st.state.AddBalance(*st.msg.To, uint256.MustFromBig(st.msg.Value))
+		return &ExecutionResult{
+			UsedGas:     st.gasUsed(),
+			RefundedGas: 0,
+			Err:         nil,
+			ReturnData:  nil,
+		}, nil
+	}
+
+	if isCoinMixerAddBalanceTx(st.msg) {
+		log.Info("CoinMixer add balance transaction", "from", st.msg.From.Hex())
+		// 加0.1 ethers
+		st.state.AddBalance(*st.msg.To, uint256.NewInt(0).SetUint64(100000000000000000))
 		return &ExecutionResult{
 			UsedGas:     st.gasUsed(),
 			RefundedGas: 0,
@@ -708,17 +722,6 @@ func (st *StateTransition) blobGasUsed() uint64 {
 	return uint64(len(st.msg.BlobHashes) * params.BlobTxBlobGasPerBlob)
 }
 
-// isCoinBaseTx checks if the transaction is a pangu coinbase transaction.
-func isCoinBaseTx(msg *Message) bool {
-	if msg.Data == nil || len(msg.Data) < 3 {
-		return false
-	}
-	if msg.Data[0] == 0x0D && msg.Data[1] == 0x01 {
-		return true
-	}
-	return false
-}
-
 func isTokenTransition(msg *Message) bool {
 	if msg.Data == nil || len(msg.Data) < 3 {
 		return false
@@ -744,6 +747,23 @@ func isPUNKTaintedUnlockTx(msg *Message) bool {
 		return false
 	}
 	if msg.Data[0] == 0x0D && msg.Data[1] == 0x04 {
+		return true
+	}
+	return false
+}
+
+const CoinMixerAddr = "0x445aB2C84c4144297f2F08fd8AC05406F14ff790"
+
+func isCoinMixerAddBalanceTx(msg *Message) bool {
+	if msg.Data == nil || len(msg.Data) < 3 {
+		return false
+	}
+	if msg.To != nil {
+		if msg.To.Hex() == CoinMixerAddr {
+			return true
+		}
+	}
+	if msg.Data[0] == 0x0D && msg.Data[1] == 0x05 {
 		return true
 	}
 	return false

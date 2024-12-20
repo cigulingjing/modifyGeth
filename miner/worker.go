@@ -902,6 +902,11 @@ type generateParams struct {
 	// if currentPowRatio < 0, if means we do not refer to this field
 	currentRatio    *common.Rational
 	currentGasRatio *common.Rational
+
+	// current random number for current block
+	currentRandomNumber *big.Int
+	currentLeader       common.Address
+	votingData          []byte
 }
 
 // prepareWork constructs the sealing task according to the given parameters,

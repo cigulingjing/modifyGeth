@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/core"
@@ -61,6 +62,10 @@ func (m *mockBackend) TxPool() *txpool.TxPool {
 
 func (m *mockBackend) NetworkId() uint64 {
 	return 1
+}
+
+func (m *mockBackend) AccountManager() *accounts.Manager {
+	return nil
 }
 
 func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (statedb *state.StateDB, err error) {

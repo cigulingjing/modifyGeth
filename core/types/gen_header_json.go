@@ -41,6 +41,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		AvgRatioDenominator hexutil.Uint64  `json:"avgRatioDenominator" rlp:"optional"`
 		AvgGasNumerator     hexutil.Uint64  `json:"avgGasNumerator" rlp:"optional"`
 		AvgGasDenominator   hexutil.Uint64  `json:"avgGasDenominator" rlp:"optional"`
+		PoSLeader           common.Address  `json:"posLeader" rlp:"optional"`
+		PoSVoting           []byte          `json:"posVoting" rlp:"optional"`
+		CommitTxLength      uint64          `json:"commitTxLength" rlp:"optional"`
 		Tainted             []byte          `json:"tainted" rlp:"optional"`
 		Incentive           *uint256.Int    `json:"incentive" rlp:"optional"`
 		BaseFee             *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
@@ -75,6 +78,9 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.AvgRatioDenominator = hexutil.Uint64(h.AvgRatioDenominator)
 	enc.AvgGasNumerator = hexutil.Uint64(h.AvgGasNumerator)
 	enc.AvgGasDenominator = hexutil.Uint64(h.AvgGasDenominator)
+	enc.PoSLeader = h.PoSLeader
+	enc.PoSVoting = h.PoSVoting
+	enc.CommitTxLength = h.CommitTxLength
 	enc.Tainted = h.Tainted
 	enc.Incentive = h.Incentive
 	enc.BaseFee = (*hexutil.Big)(h.BaseFee)
@@ -113,6 +119,9 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		AvgRatioDenominator *hexutil.Uint64 `json:"avgRatioDenominator" rlp:"optional"`
 		AvgGasNumerator     *hexutil.Uint64 `json:"avgGasNumerator" rlp:"optional"`
 		AvgGasDenominator   *hexutil.Uint64 `json:"avgGasDenominator" rlp:"optional"`
+		PoSLeader           *common.Address `json:"posLeader" rlp:"optional"`
+		PoSVoting           []byte          `json:"posVoting" rlp:"optional"`
+		CommitTxLength      *uint64         `json:"commitTxLength" rlp:"optional"`
 		Tainted             []byte          `json:"tainted" rlp:"optional"`
 		Incentive           *uint256.Int    `json:"incentive" rlp:"optional"`
 		BaseFee             *hexutil.Big    `json:"baseFeePerGas" rlp:"optional"`
@@ -211,6 +220,15 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	}
 	if dec.AvgGasDenominator != nil {
 		h.AvgGasDenominator = uint64(*dec.AvgGasDenominator)
+	}
+	if dec.PoSLeader != nil {
+		h.PoSLeader = *dec.PoSLeader
+	}
+	if dec.PoSVoting != nil {
+		h.PoSVoting = dec.PoSVoting
+	}
+	if dec.CommitTxLength != nil {
+		h.CommitTxLength = *dec.CommitTxLength
 	}
 	if dec.Tainted != nil {
 		h.Tainted = dec.Tainted

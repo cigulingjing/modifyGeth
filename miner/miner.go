@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -42,6 +43,7 @@ import (
 // Backend wraps all methods required for mining. Only full node is capable
 // to offer all the functions here.
 type Backend interface {
+	AccountManager() *accounts.Manager
 	BlockChain() *core.BlockChain
 	TxPool() *txpool.TxPool
 	NetworkId() uint64
@@ -75,15 +77,16 @@ var DefaultConfig = Config{
 
 // Miner creates blocks and searches for proof-of-work values.
 type Miner struct {
-	mux      *event.TypeMux
-	eth      Backend
-	engine   consensus.Engine
-	exitCh   chan struct{}
-	startCh  chan struct{}
-	stopCh   chan struct{}
-	worker   *worker
-	executor *executor
-	poter    *poter
+	mux              *event.TypeMux
+	eth              Backend
+	engine           consensus.Engine
+	exitCh           chan struct{}
+	startCh          chan struct{}
+	stopCh           chan struct{}
+	worker           *worker
+	executor         *executor
+	poter            *poter
+	coinMixerMonitor *CoinMixerMonitor
 
 	wg sync.WaitGroup
 }
@@ -124,8 +127,9 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		startCh: make(chan struct{}),
 		stopCh:  make(chan struct{}),
 		// worker:   newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, true),
-		executor: newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient, transferClient, dciClient),
-		poter:    newPoter(eth, potClient),
+		executor:         newExecutor(config, chainConfig, engine, eth, mux, isLocalBlock, false, p2pClient, transferClient, dciClient),
+		poter:            newPoter(eth, potClient),
+		coinMixerMonitor: NewCoinMixerMonitor(eth, chainConfig, mux),
 	}
 	miner.wg.Add(1)
 	go miner.update()
@@ -197,6 +201,7 @@ func (miner *Miner) update() {
 				// miner.worker.start()
 				miner.executor.start()
 				miner.poter.start()
+				miner.coinMixerMonitor.start()
 			}
 			shouldStart = true
 		case <-miner.stopCh:
@@ -204,10 +209,12 @@ func (miner *Miner) update() {
 			// miner.worker.stop()
 			miner.executor.stop()
 			miner.poter.close()
+			miner.coinMixerMonitor.Stop()
 		case <-miner.exitCh:
 			// miner.worker.close()
 			miner.executor.close()
 			miner.poter.close()
+			miner.coinMixerMonitor.Stop()
 			return
 		}
 	}

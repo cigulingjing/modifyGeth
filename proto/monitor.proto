@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package pb;
+import "common.proto";
+
+option go_package = "./pb";
+
+service CoinMixerMonitor {
+    // 监听转账区消息
+    rpc UTXODeposit(UTXODepositRequest) returns (Empty) {}
+}
+
+message UTXODepositRequest {
+    bytes tx = 1;              // 用户构造的调用混币合约的交易
+    bytes addr = 2;            // utxo交易的用户地址
+    uint64 value = 3;          // depositValue,暂时默认为100
+}
