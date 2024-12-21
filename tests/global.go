@@ -2,12 +2,12 @@
 
 package tests
 
-
 import (
 	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/clique"
@@ -33,10 +33,9 @@ var (
 	userKey, _  = crypto.GenerateKey()
 	userAddress = crypto.PubkeyToAddress(userKey.PublicKey)
 	// Contract setting, parse from json which is created by hardhat
-	contractAbi, contractBytecode, deployedBytecode = abi.LoadHardhatContract("../cryptoupgrade/contract/CodeStorage.json")
-	contractAddress=common.BytesToAddress([]byte{67})
+	contractAbi, contractBytecode, deployedBytecode = abi.LoadHardhatContract("../voucher/abi/mutivoucher.json")
+	contractAddress                                 = common.BytesToAddress([]byte{68})
 )
-
 
 // Implements the interface of miner.Backend
 type TestBackend struct {
@@ -49,6 +48,9 @@ type TestBackend struct {
 func (m *TestBackend) NetworkId() uint64            { return 1 }
 func (m *TestBackend) BlockChain() *core.BlockChain { return m.bc }
 func (m *TestBackend) TxPool() *txpool.TxPool       { return m.txpool }
+func (m *TestBackend) AccountManager() *accounts.Manager {
+	return accounts.NewManager(&accounts.Config{})
+}
 
 func (m *TestBackend) AddTx(tx *types.Transaction) {
 	errs := m.txpool.Add([]*types.Transaction{tx}, true, false)
@@ -61,28 +63,38 @@ func (m *TestBackend) AddTx(tx *types.Transaction) {
 
 func (m *TestBackend) parseContractAddress() *common.Address {
 	var contractAddress *common.Address
+	// Output every one second
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
-	// ! May cause a dead loop
+	done := make(chan bool)
+
+	// Wait 5s, write to done
+	go func() {
+		time.Sleep(5 * time.Second)
+		done <- true
+	}()
 	for {
-		latestHeader := m.bc.CurrentBlock()
-		receipts := m.bc.GetReceiptsByHash(latestHeader.Hash())
-		if receipts == nil {
-			fmt.Println("no receipts in latest block")
-		} else {
-			for i := range receipts {
-				// Search the receipt which contractAddress is not none
-				if receipts[i].ContractAddress != (common.Address{}) {
-					fmt.Printf("Contract Address: %v \n", receipts[i].ContractAddress)
-					contractAddress = &receipts[i].ContractAddress
-					return contractAddress
+		select {
+		case <-done:
+			return nil
+		case <-ticker.C:
+			latestHeader := m.bc.CurrentBlock()
+			receipts := m.bc.GetReceiptsByHash(latestHeader.Hash())
+			if receipts == nil {
+				fmt.Println("no receipts in latest block")
+			} else {
+				for i := range receipts {
+					// Search the receipt which contractAddress is not none
+					if receipts[i].ContractAddress != (common.Address{}) {
+						fmt.Printf("Contract Address: %v \n", receipts[i].ContractAddress)
+						contractAddress = &receipts[i].ContractAddress
+						return contractAddress
+					}
 				}
 			}
 		}
 	}
-	// if contractAddress == nil {
-	// 	fmt.Println("Parse contract address from current block is failed")
-	// }
-	// return contractAddress
 }
 
 func (m *TestBackend) CreateMiner() *miner.Miner {
@@ -121,8 +133,8 @@ func genesisBlock() *core.Genesis {
 		BaseFee:    big.NewInt(params.InitialBaseFee),
 		Difficulty: big.NewInt(1),
 		Alloc: map[common.Address]core.GenesisAccount{
-			bankAddress:     {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
-			userAddress:     {Balance: big.NewInt(1000000)},
+			bankAddress:      {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+			userAddress:      {Balance: big.NewInt(1000000)},
 			contractAddress: {Code: common.FromHex(deployedBytecode)},
 		},
 	}
@@ -180,4 +192,3 @@ func newDeployContractTx(bc *core.BlockChain, Nonce int) *types.Transaction {
 	})
 	return tx0
 }
-

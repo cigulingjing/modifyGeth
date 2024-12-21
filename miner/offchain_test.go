@@ -79,10 +79,10 @@ func TestOffchain(t *testing.T) {
 	fmt.Printf("errs: %v\n", errs)
 	// wait for consense
 	time.Sleep(20 * time.Second)
+
 	// catch result from executor environment
-	state := e.env.state
-	result := state.OffChainResult
-	fmt.Printf("result in stateDB:%v\n", result)
+	// state := e.env.state
+	// result := state.OffChainResult
 
 	//  txGet2 will be executed in the second block, leading congestion of exuctor
 	txGet2 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{

@@ -29,11 +29,13 @@ import (
 // StateAccount is the Ethereum consensus representation of accounts.
 // These objects are stored in the main account trie.
 type StateAccount struct {
-	Nonce         uint64
-	Balance       *uint256.Int
-	Root          common.Hash // merkle root of the storage trie
-	CodeHash      []byte
-	SecurityLevel uint64 // security level range 1-5. 0 means the account is locked
+	Nonce           uint64
+	Balance         *uint256.Int
+	Root            common.Hash // merkle root of the storage trie
+	CodeHash        []byte
+	SecurityLevel   uint64 // security level range 1-5. 0 means the account is locked
+	Interest        *uint256.Int
+	LastBlockNumber uint64 // Last block, where this account catch interest
 }
 
 // NewEmptyStateAccount constructs an empty state account.
