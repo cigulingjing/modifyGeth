@@ -293,12 +293,12 @@ type londonSigner struct{ eip2930Signer }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewLondonSigner(chainId *big.Int) Signer {
-	fmt.Println("london!!!!!!!!")
+	// fmt.Println("london!!!!!!!!")
 	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("london sender invoke")
+	// fmt.Println("london sender invoke")
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
@@ -371,7 +371,7 @@ func (s eip2930Signer) Equal(s2 Signer) bool {
 }
 
 func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("eip2930 sender invoke")
+	// fmt.Println("eip2930 sender invoke")
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
 	case PowTxType:

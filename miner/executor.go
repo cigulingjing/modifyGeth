@@ -45,17 +45,21 @@ type executor_env struct {
 	tcount      int // 成功执行的交易数量
 	txs         types.Transactions
 	receipts    []*types.Receipt
+
+	// Interest rate
+	interestRate uint64
 }
 
 // copy creates a deep copy of environment.
 func (env *executor_env) copy() *executor_env {
 	cpy := &executor_env{
-		signer:   env.signer,
-		state:    env.state.Copy(),
-		tcount:   env.tcount,
-		coinbase: env.coinbase,
-		header:   types.CopyHeader(env.header),
-		receipts: copyReceipts(env.receipts),
+		signer:       env.signer,
+		state:        env.state.Copy(),
+		tcount:       env.tcount,
+		coinbase:     env.coinbase,
+		header:       types.CopyHeader(env.header),
+		receipts:     copyReceipts(env.receipts),
+		interestRate: env.interestRate,
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -932,6 +936,7 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash, "err", err)
+			log.Error("Transaction failed, account skipped", "hash", tx.Hash, "err", err)
 			continue
 		}
 	}
@@ -972,8 +977,6 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 			fmt.Printf("Transaction type:%v\n", data[2])
 			switch data[2] {
 			case 1:
-				// attention: the env edit must outer of offchainCom,stateDB don't exist in e
-				env.state.OffChainResult = true
 				// 1.remove identifies field   2. go routine: push result in to channel
 				go e.offchainCom(data[3:])
 			case 2:

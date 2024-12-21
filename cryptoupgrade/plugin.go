@@ -49,6 +49,10 @@ func capitalString(str string) string {
 }
 
 func CallAlgorithm(funName string, gas uint64, encodedInput []byte) ([]byte, uint64) {
+
+	// ! using in test
+	compressedPath = "./testgo/"
+
 	fmt.Printf("Call algorithm %s,encodedinput: %s\n", funName, common.Bytes2Hex(encodedInput))
 	pluginPath := compressedPath + "so/" + funName + ".so"
 	// Decode input
@@ -58,15 +62,19 @@ func CallAlgorithm(funName string, gas uint64, encodedInput []byte) ([]byte, uin
 	input, err := UnpackInput(encodedInput, inputType)
 	if err != nil {
 		log.Error("Unpack input from callFunc error:", err)
+		fmt.Println("Unpack input from callFunc error:", err)
 	}
 	// Attention 1.[]interface{} and ...interface{} 2.Algorithm capital
 	output := callPlugin(pluginPath, capitalString(funName), input)
 	encodedOutput, err := PackOutput(output, outputType)
+	remainGas := uint64(0)
 	if err != nil {
 		log.Error("Pack output error:", err)
+		fmt.Println("Pack output error:", err)
+	} else {
+		remainGas = gas - uint64(funcInfo.gas)
+		log.Info(fmt.Sprintf("Successful call upgrade algorithm. Gas:%d EncodeReturn: %v", gas, encodedOutput))
 	}
-	remainGas := gas - uint64(funcInfo.gas)
-	log.Info(fmt.Sprintf("Successful call upgrade algorithm. Gas:%d EncodeReturn: %v", gas, encodedOutput))
 	return encodedOutput, remainGas
 }
 
@@ -75,19 +83,19 @@ func callPlugin(pluginPath string, funName string, args []interface{}) []interfa
 	p, err := plugin.Open(pluginPath)
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to open plugin: path %s,err %v\n", pluginPath, err))
-		// fmt.Printf("Failed to open plugin: path %s,err %v\n", pluginPath, err)
+		fmt.Printf("Failed to open plugin: path %s,err %v\n", pluginPath, err)
 		return nil
 	}
 	fn, err := p.Lookup(funName)
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to find symbol %s in plugin %s: %v\n", funName, pluginPath, err))
-		// fmt.Printf("Failed to find symbol %s in plugin %s: %v\n", funName, pluginPath, err)
+		fmt.Printf("Failed to find symbol %s in plugin %s: %v\n", funName, pluginPath, err)
 		return nil
 	}
 	ReturnList, err := callFunction(fn, args)
 	if err != nil {
 		log.Error("Error in call fun ", funName, " in plugin ", pluginPath)
-		// fmt.Println("Error in call fun ", funName, " in plugin ", pluginPath)
+		fmt.Println("Error in call fun ", funName, " in plugin ", pluginPath)
 		return nil
 	} else {
 		return ReturnList
