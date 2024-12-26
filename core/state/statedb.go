@@ -19,6 +19,7 @@ package state
 
 import (
 	"fmt"
+	"math/big"
 	"sort"
 	"time"
 
@@ -138,6 +139,9 @@ type StateDB struct {
 
 	// Testing hooks
 	onCommit func(states *triestate.Set) // Hook invoked when commit is performed
+
+	// Interest rate, 0-100
+	interestRate int64
 }
 
 // New creates a new state from a given trie.
@@ -576,11 +580,13 @@ func (s *StateDB) getDeletedStateObject(addr common.Address) *stateObject {
 				return nil
 			}
 			data = &types.StateAccount{
-				Nonce:         acc.Nonce,
-				Balance:       acc.Balance,
-				CodeHash:      acc.CodeHash,
-				Root:          common.BytesToHash(acc.Root),
-				SecurityLevel: acc.SecurityLevel,
+				Nonce:           acc.Nonce,
+				Balance:         acc.Balance,
+				CodeHash:        acc.CodeHash,
+				Root:            common.BytesToHash(acc.Root),
+				SecurityLevel:   acc.SecurityLevel,
+				Interest:        acc.Interest,
+				LastBlockNumber: acc.LastBlockNumber,
 			}
 			if len(data.CodeHash) == 0 {
 				data.CodeHash = types.EmptyCodeHash.Bytes()
@@ -710,8 +716,9 @@ func (s *StateDB) Copy() *StateDB {
 		// to the snapshot tree, we need to copy that as well. Otherwise, any
 		// block mined by ourselves will cause gaps in the tree, and force the
 		// miner to operate trie-backed only.
-		snaps: s.snaps,
-		snap:  s.snap,
+		snaps:        s.snaps,
+		snap:         s.snap,
+		interestRate: s.interestRate,
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -1425,4 +1432,75 @@ func (s *StateDB) SetSecurityLevel(addr common.Address, level uint64) {
 		stateObject.SetSecurityLevel(level)
 	}
 
+}
+
+// * Methods are used to interest compute
+func (s *StateDB) SetInterestRate(rate int64) error {
+	if rate < 0 || rate > 100 {
+		return fmt.Errorf("interest rate: %v is illegal", rate)
+	} else {
+		s.interestRate = rate
+		return nil
+	}
+}
+
+// Return the old block number(interest edit), and record the current number
+func (s *StateDB) ComputeInterest(addr common.Address, currentNumber *big.Int) {
+	obj := s.getStateObject(addr)
+	if obj != nil {
+		// Initial pointer
+		if obj.data.LastBlockNumber == nil {
+			obj.data.LastBlockNumber = big.NewInt(0)
+		}
+	} else {
+		// State not exist, exit
+		log.Error(fmt.Sprintf("obi of %s is not exit", addr))
+		return
+	}
+
+	// Compute interest=(currentNumber - lastNumber) * rate * balance
+	interest := big.NewInt(1)
+	interest.Sub(currentNumber, obj.data.LastBlockNumber)
+	interest.Mul(interest, big.NewInt(s.interestRate))
+
+	interest_u256 := uint256.NewInt(0)
+	interest_u256.SetFromBig(interest)
+
+	balance_u256 := s.GetBalance(addr)
+	interest_u256.Mul(interest_u256, balance_u256)
+	// Initial interest
+	if obj.data.Interest == nil {
+		obj.data.Interest = uint256.NewInt(0)
+	}
+	// Change account state
+	obj.data.Interest.Add(interest_u256, obj.data.Interest)
+	obj.data.LastBlockNumber.Set(currentNumber)
+	fmt.Printf("Add %v(expand 100 times) interest to address:%s. Last edit interest block number: %v, current Number: %v\n", interest_u256, addr, obj.data.LastBlockNumber, currentNumber)
+}
+
+// Use interest to pay gas, if insufficient return the insufficient amount
+func (s *StateDB) UseInterest(addr common.Address, usedInterest *uint256.Int) *uint256.Int {
+	obj := s.getStateObject(addr)
+	// Interest in stateDB is expanded by 100 times to avoid decimals. So there need to mul 100
+	usedInterest.Mul(usedInterest, uint256.NewInt(100))
+
+	interest := obj.data.Interest
+	if interest == nil {
+		log.Error("Interest is not initial")
+		return usedInterest
+	}
+
+	if interest.Cmp(usedInterest) == -1 {
+		// Insufficient to pay gas
+		insuffAmount := uint256.NewInt(0)
+		insuffAmount.Sub(usedInterest, obj.data.Interest)
+		// Div 100
+		insuffAmount_div100 := uint256.NewInt(0)
+		insuffAmount_div100.Div(insuffAmount, uint256.NewInt(100))
+		return insuffAmount
+	} else {
+		// Sufficient to pay gas
+		obj.data.Interest.Sub(obj.data.Interest, usedInterest)
+		return nil
+	}
 }

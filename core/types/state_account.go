@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -35,16 +36,18 @@ type StateAccount struct {
 	CodeHash        []byte
 	SecurityLevel   uint64 // security level range 1-5. 0 means the account is locked
 	Interest        *uint256.Int
-	LastBlockNumber uint64 // Last block, where this account catch interest
+	LastBlockNumber *big.Int // The block number where the interest was last calculated
 }
 
 // NewEmptyStateAccount constructs an empty state account.
 func NewEmptyStateAccount() *StateAccount {
 	return &StateAccount{
-		Balance:       new(uint256.Int),
-		Root:          EmptyRootHash,
-		CodeHash:      EmptyCodeHash.Bytes(),
-		SecurityLevel: 1,
+		Balance:         new(uint256.Int),
+		Root:            EmptyRootHash,
+		CodeHash:        EmptyCodeHash.Bytes(),
+		SecurityLevel:   1,
+		Interest:        uint256.NewInt(0),
+		LastBlockNumber: big.NewInt(0),
 	}
 }
 
@@ -55,11 +58,13 @@ func (acct *StateAccount) Copy() *StateAccount {
 		balance = new(uint256.Int).Set(acct.Balance)
 	}
 	return &StateAccount{
-		Nonce:         acct.Nonce,
-		Balance:       balance,
-		Root:          acct.Root,
-		CodeHash:      common.CopyBytes(acct.CodeHash),
-		SecurityLevel: acct.SecurityLevel,
+		Nonce:           acct.Nonce,
+		Balance:         balance,
+		Root:            acct.Root,
+		CodeHash:        common.CopyBytes(acct.CodeHash),
+		SecurityLevel:   acct.SecurityLevel,
+		Interest:        acct.Interest,
+		LastBlockNumber: acct.LastBlockNumber,
 	}
 }
 
@@ -67,19 +72,23 @@ func (acct *StateAccount) Copy() *StateAccount {
 // with a byte slice. This format can be used to represent full-consensus format
 // or slim format which replaces the empty root and code hash as nil byte slice.
 type SlimAccount struct {
-	Nonce         uint64
-	Balance       *uint256.Int
-	Root          []byte // Nil if root equals to types.EmptyRootHash
-	CodeHash      []byte // Nil if hash equals to types.EmptyCodeHash
-	SecurityLevel uint64
+	Nonce           uint64
+	Balance         *uint256.Int
+	Root            []byte // Nil if root equals to types.EmptyRootHash
+	CodeHash        []byte // Nil if hash equals to types.EmptyCodeHash
+	SecurityLevel   uint64
+	Interest        *uint256.Int
+	LastBlockNumber *big.Int
 }
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
 func SlimAccountRLP(account StateAccount) []byte {
 	slim := SlimAccount{
-		Nonce:         account.Nonce,
-		Balance:       account.Balance,
-		SecurityLevel: account.SecurityLevel,
+		Nonce:           account.Nonce,
+		Balance:         account.Balance,
+		SecurityLevel:   account.SecurityLevel,
+		Interest:        account.Interest,
+		LastBlockNumber: account.LastBlockNumber,
 	}
 	if account.Root != EmptyRootHash {
 		slim.Root = account.Root[:]
@@ -104,7 +113,8 @@ func FullAccount(data []byte) (*StateAccount, error) {
 	var account StateAccount
 	account.Nonce, account.Balance = slim.Nonce, slim.Balance
 	account.SecurityLevel = slim.SecurityLevel
-
+	account.LastBlockNumber = slim.LastBlockNumber
+	account.Interest = slim.Interest
 	// Interpret the storage root and code hash in slim format.
 	if len(slim.Root) == 0 {
 		account.Root = EmptyRootHash

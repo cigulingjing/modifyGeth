@@ -22,7 +22,14 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	} else {
 		w.WriteUint256(obj.Interest)
 	}
-	w.WriteUint64(obj.LastBlockNumber)
+	if obj.LastBlockNumber == nil {
+		w.Write(rlp.EmptyString)
+	} else {
+		if obj.LastBlockNumber.Sign() == -1 {
+			return rlp.ErrNegativeBigInt
+		}
+		w.WriteBigInt(obj.LastBlockNumber)
+	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

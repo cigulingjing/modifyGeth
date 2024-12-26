@@ -98,7 +98,7 @@ func TestBlake2s(t *testing.T) {
 	plugFile := "./testgo/so/" + funcName + ".so"
 	compilePlugin(srcFile, plugFile)
 
-	// Encode
+	// Encode input
 	bytesType, _ := abi.NewType("bytes", "", nil)
 	args := abi.Arguments{
 		abi.Argument{Type: bytesType},
