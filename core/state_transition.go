@@ -132,17 +132,6 @@ func toWordSize(size uint64) uint64 {
 
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
-
-// 交易类型定义
-type MessageType uint8
-
-const (
-	//EVM 交易类型
-	TX_EVM MessageType = iota
-	//链外计算类型
-	TX_WASM
-)
-
 type Message struct {
 	To            *common.Address
 	From          common.Address
@@ -156,8 +145,6 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
-	//标识Message类型字段
-	Type MessageType
 
 	// Attribute for MultiVoucher
 	tokenName   string
@@ -331,7 +318,7 @@ func (st *StateTransition) buyGas() error {
 	BalanceOfGas := uint64(0)
 	// Check account balance enough to pay gas
 	if st.msg.FeeCurrency != nil {
-		// Call Contract
+		// Using voucher to buy gas
 		balance := big.NewInt(0)
 		BalanceOfGas, _ = voucher.BalanceOf.Execute(st.evm, &balance, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, st.msg.From)
 		// Legitimacy check
@@ -342,8 +329,16 @@ func (st *StateTransition) buyGas() error {
 			fmt.Printf("Call BalanceOf use %v unit of gas\n", BalanceOfGas)
 		}
 	} else {
-		if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+		// At first, use interest to pay gas.
+		insufficient := st.state.UseInterest(st.msg.From, balanceCheckU256)
+		if insufficient != nil {
+			// Only using native token to pay insufficient part
+			fmt.Println("Using interest to pay gas, insufficient amount is:", insufficient)
+			if have, want := st.state.GetBalance(st.msg.From), insufficient; have.Cmp(want) < 0 {
+				return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+			}
+		} else {
+			fmt.Printf("Using interest to pay all %v units of gas\n", balanceCheckU256)
 		}
 	}
 
@@ -649,11 +644,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			return nil, err
 		}
 	} else {
-		// Using interest to pay gas. There are two steps: 1. According to block heigth, compute interest 2. pay gas
-		
-		
-
-
 		// Using Native to pay gas, need to refund gas fee.
 		if !rules.IsLondon {
 			// Before EIP-3529: refunds were capped to gasUsed / 2

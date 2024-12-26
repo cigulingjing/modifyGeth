@@ -45,21 +45,17 @@ type executor_env struct {
 	tcount      int // 成功执行的交易数量
 	txs         types.Transactions
 	receipts    []*types.Receipt
-
-	// Interest rate
-	interestRate uint64
 }
 
 // copy creates a deep copy of environment.
 func (env *executor_env) copy() *executor_env {
 	cpy := &executor_env{
-		signer:       env.signer,
-		state:        env.state.Copy(),
-		tcount:       env.tcount,
-		coinbase:     env.coinbase,
-		header:       types.CopyHeader(env.header),
-		receipts:     copyReceipts(env.receipts),
-		interestRate: env.interestRate,
+		signer:   env.signer,
+		state:    env.state.Copy(),
+		tcount:   env.tcount,
+		coinbase: env.coinbase,
+		header:   types.CopyHeader(env.header),
+		receipts: copyReceipts(env.receipts),
 	}
 	if env.gasPool != nil {
 		gasPool := *env.gasPool
@@ -918,6 +914,9 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 				continue
 			}
 		}
+
+		// TODO: How to transimit rate from govern.
+		env.state.SetInterestRate(1) // 1% interest rate
 
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 		logs, err := e.executeTransaction(env, tx)
