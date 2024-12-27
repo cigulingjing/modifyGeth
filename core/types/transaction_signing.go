@@ -184,12 +184,15 @@ type cancunSigner struct{ londonSigner }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewCancunSigner(chainId *big.Int) Signer {
-	fmt.Println("cancun!!!!!!!!")
 	return cancunSigner{londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}}
 }
 
 func (s cancunSigner) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("cancun sender invoke")
+	if tx.Type() == DynamicCryptoTxType {
+		// TODO：complete logic
+		fmt.Println("cancun sender invoke dynamic crypto")
+	}
+
 	if tx.Type() == PowTxType {
 		V, R, S := tx.RawSignatureValues()
 		// POW txs are defined to use 0 and 1 as their recovery
@@ -249,6 +252,11 @@ func (s cancunSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s cancunSigner) Hash(tx *Transaction) common.Hash {
+	if tx.Type() == DynamicCryptoTxType {
+		// TODO：complete logic
+		fmt.Println("cancun hash invoke dynamic crypto")
+	}
+
 	if tx.Type() == PowTxType {
 		return prefixedRlpHash(
 			tx.Type(),
@@ -293,12 +301,11 @@ type londonSigner struct{ eip2930Signer }
 // - EIP-155 replay protected transactions, and
 // - legacy Homestead transactions.
 func NewLondonSigner(chainId *big.Int) Signer {
-	fmt.Println("london!!!!!!!!")
 	return londonSigner{eip2930Signer{NewEIP155Signer(chainId)}}
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("london sender invoke")
+	// fmt.Println("london sender invoke")
 	if tx.Type() != DynamicFeeTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
@@ -374,6 +381,9 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 	fmt.Println("eip2930 sender invoke")
 	V, R, S := tx.RawSignatureValues()
 	switch tx.Type() {
+	case DynamicCryptoTxType:
+		// TODO：complete logic
+		fmt.Println("eip2930 sender invoke dynamic crypto")
 	case PowTxType:
 		V, R, S := tx.RawSignatureValues()
 		// POW txs are defined to use 0 and 1 as their recovery
@@ -400,6 +410,9 @@ func (s eip2930Signer) Sender(tx *Transaction) (common.Address, error) {
 
 func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
 	switch txdata := tx.inner.(type) {
+	case *DynamicCryptoTx:
+		// TODO：complete logic
+		fmt.Println("eip2930 signature values invoke dynamic crypto")
 	case *PowTx:
 		// Check that chain ID of tx matches the signer. We also accept ID zero here,
 		// because it indicates that the chain ID was not specified in the tx.
@@ -429,6 +442,24 @@ func (s eip2930Signer) SignatureValues(tx *Transaction, sig []byte) (R, S, V *bi
 // It does not uniquely identify the transaction.
 func (s eip2930Signer) Hash(tx *Transaction) common.Hash {
 	switch tx.Type() {
+	case DynamicCryptoTxType:
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.GasTipCap(),
+				tx.GasFeeCap(),
+				tx.Gas(),
+				tx.To(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				tx.CryptoType(),
+				tx.SignatureData(),
+				tx.PublicKeyIndex(),
+				tx.PublicKey(),
+			})
 	case PowTxType:
 		return prefixedRlpHash(
 			tx.Type(),
@@ -494,7 +525,6 @@ func (s EIP155Signer) Equal(s2 Signer) bool {
 var big8 = big.NewInt(8)
 
 func (s EIP155Signer) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("eip1559 sender invoke")
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}
@@ -558,7 +588,6 @@ func (hs HomesteadSigner) SignatureValues(tx *Transaction, sig []byte) (r, s, v 
 }
 
 func (hs HomesteadSigner) Sender(tx *Transaction) (common.Address, error) {
-	fmt.Println("homestead sender invoke")
 	if tx.Type() != LegacyTxType {
 		return common.Address{}, ErrTxTypeNotSupported
 	}

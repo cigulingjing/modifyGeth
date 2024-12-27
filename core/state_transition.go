@@ -19,7 +19,6 @@ package core
 import (
 	"fmt"
 
-	"encoding/hex"
 	"math"
 	"math/big"
 
@@ -133,17 +132,6 @@ func toWordSize(size uint64) uint64 {
 
 // A Message contains the data derived from a single transaction that is relevant to state
 // processing.
-
-// 交易类型定义
-type MessageType uint8
-
-const (
-	//EVM 交易类型
-	TX_EVM MessageType = iota
-	//链外计算类型
-	TX_WASM
-)
-
 type Message struct {
 	To            *common.Address
 	From          common.Address
@@ -157,8 +145,6 @@ type Message struct {
 	AccessList    types.AccessList
 	BlobGasFeeCap *big.Int
 	BlobHashes    []common.Hash
-	//标识Message类型字段
-	Type MessageType
 
 	// Attribute for MultiVoucher
 	tokenName   string
@@ -169,30 +155,42 @@ type Message struct {
 	// This field will be set to true for operations like RPC eth_call.
 	SkipAccountChecks bool
 
-	HashNonce     *big.Int
-	CryptoType    []byte
-	SignatureData []byte
+	HashNonce      *big.Int
+	CryptoType     []byte
+	SignatureData  []byte
+	PublicKey      []byte
+	PublicKeyIndex uint64
 
 	// if isPow is true, the message is a PoW transaction
 	// TODO: check whether it can use pow as gas.
 	IsPow bool
 }
 
-// Parse voucher info from Tx.Data
+// Parse voucher info from Tx.Data, delete flag header when finished.
+// Extra information of Tx.Data contains: name([10]byte)
 func (m *Message) ParseVoucher() {
+	// log.Info("Begin to parse voucher")
+	// fmt.Printf("len(m.Data): %v. m.Data %v\n", len(m.Data), m.Data)
 	// Data's legitimacy check
-	if len(m.Data) > 23 && m.Data[0] == 0x0A && m.Data[1] == 0x0D && m.Data[2] == 0x03 {
+	if len(m.Data) >= 23 && m.Data[0] == 0x0A && m.Data[1] == 0x0D && m.Data[2] == 0x03 {
 		// Initial and assign pointer
 		m.FeeCurrency = new(common.Address)
-		*m.FeeCurrency = common.BytesToAddress(m.Data[3:23])
-		tokenNameArray, err := hex.DecodeString(string(m.Data[23:]))
-		if err != nil {
-			fmt.Printf("Err in parse Voucher: %v\n", err)
-		}
-		m.tokenName = string(tokenNameArray)
-		fmt.Printf("Tx use %s to pay Gas,contract address is %s!\n", m.tokenName, m.FeeCurrency)
-	}
+		*m.FeeCurrency = voucher.VoucherAddress
 
+		// Parse token name
+		i := 3
+		for ; i < 23; i++ {
+			if m.Data[i] == 0 {
+				break
+			}
+		}
+		m.tokenName = string(m.Data[3:i])
+		// Delete prefix
+		m.Data = m.Data[23:]
+		log.Info("Tx use %s to pay Gas,contract address is %s!\n", m.tokenName, m.FeeCurrency)
+	} else {
+		log.Info("Tx is not use voucher to pay gas")
+	}
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -318,30 +316,38 @@ func (st *StateTransition) buyGas() error {
 	if overflow {
 		return fmt.Errorf("%w: address %v required balance exceeds 256 bits", ErrInsufficientFunds, st.msg.From.Hex())
 	}
-	var BalanceOfGas uint64
+
+	BalanceOfGas := uint64(0)
 	// Check account balance enough to pay gas
 	if st.msg.FeeCurrency != nil {
-		// Call Contract
-		BalanceOfMethod := voucher.BalanceOf.Bind(st.msg.FeeCurrency)
+		// Using voucher to buy gas
 		balance := big.NewInt(0)
-		BalanceOfGas, _ = BalanceOfMethod.Execute(st.evm, &balance, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, st.msg.From)
+		BalanceOfGas, _ = voucher.BalanceOf.Execute(st.evm, &balance, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, st.msg.From)
 		// Legitimacy check
 		if balance.Cmp(balanceCheck) < 0 {
 			fmt.Println("Balance of account is insufficient!")
 			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg, balance, balanceCheck)
 		} else {
-			fmt.Printf("Call BalanceOf! Using %v unit of gas\n", BalanceOfGas)
+			fmt.Printf("Call BalanceOf use %v unit of gas\n", BalanceOfGas)
 		}
 	} else {
-		if have, want := st.state.GetBalance(st.msg.From), balanceCheckU256; have.Cmp(want) < 0 {
-			return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+		// At first, use interest to pay gas.
+		insufficient := st.state.UseInterest(st.msg.From, balanceCheckU256)
+		if insufficient != nil {
+			// Only using native token to pay insufficient part
+			fmt.Println("Using interest to pay gas, insufficient amount is:", insufficient)
+			if have, want := st.state.GetBalance(st.msg.From), insufficient; have.Cmp(want) < 0 {
+				return fmt.Errorf("%w: address %v have %v want %v", ErrInsufficientFunds, st.msg.From.Hex(), have, want)
+			}
+		} else {
+			fmt.Printf("Using interest to pay all %v units of gas\n", balanceCheckU256)
 		}
 	}
 
 	if err := st.gp.SubGas(st.msg.GasLimit); err != nil {
 		return err
 	}
-	// If use voucehr to pay,need pay the gas of call BalanceOf
+	// If use voucher to pay,need pay the gas of call BalanceOf
 	st.gasRemaining += (st.msg.GasLimit - BalanceOfGas)
 
 	st.initialGas = st.msg.GasLimit
@@ -478,7 +484,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if err := st.preCheck(); err != nil {
 		return nil, err
 	}
-
 	// exec pangu coinbase(not used now)
 	// if isCoinBaseTx(st.msg) {
 	// 	log.Info("Pangu coinbase transaction", "from", st.msg.From.Hex())
@@ -576,6 +581,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 
 	// Check clauses 4-5, subtract intrinsic gas if everything is correct
 	gas, err := IntrinsicGas(msg.Data, msg.AccessList, contractCreation, rules.IsHomestead, rules.IsIstanbul, rules.IsShanghai)
+
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +589,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, st.gasRemaining, gas)
 	}
 	st.gasRemaining -= gas
-
 	// Check clause 6
 	value, overflow := uint256.FromBig(msg.Value)
 	if overflow {
@@ -620,7 +625,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 			log.Error("Call vmerr", "err", vmerr)
 		}
 	}
-
 	var gasRefund uint64
 
 	// Voucher pay gas
@@ -631,15 +635,14 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		gasUsedFee.Mul(gasUsedFee, st.msg.GasPrice)
 
 		var flag bool
-		UseMethod := voucher.Use.Bind(st.msg.FeeCurrency)
 		// Simulation of execution to calculate the cost of Gas consumed
 		snapShot := st.state.Snapshot()
-		useMethodGas, _ := UseMethod.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee)
+		useMethodGas, _ := voucher.Use.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee)
 		st.state.RevertToSnapshot(snapShot)
 
 		// Dedections from non-native token account, including the gas of call method use
 		gasUsedFee.Add(gasUsedFee, new(big.Int).SetUint64(useMethodGas))
-		if _, err := UseMethod.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee); err != nil {
+		if _, err := voucher.Use.Execute(st.evm, &flag, &st.msg.From, uint256.NewInt(0), st.msg.tokenName, gasUsedFee); err != nil {
 			return nil, err
 		}
 	} else {
@@ -675,7 +678,6 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		// old code: when a tx has executed  ,add balance to the coinbase.
 		// st.state.AddBalance(st.evm.Context.Coinbase, fee)
 	}
-
 	return &ExecutionResult{
 		UsedGas:     st.gasUsed(),
 		RefundedGas: gasRefund,

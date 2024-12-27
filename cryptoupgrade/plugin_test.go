@@ -33,7 +33,7 @@ func TestCallPlugin(t *testing.T) {
 	t.Logf("out: %v\n", out)
 }
 
-func TestPluginInProj(t *testing.T) {
+func TestAdd(t *testing.T) {
 	// Encode
 	pluginFile = "/home/ubuntu/project/modifyGeth/build/bin/plugin/so/add.so"
 	funcName := "add"
@@ -54,6 +54,66 @@ func TestPluginInProj(t *testing.T) {
 		gas:   10,
 		itype: "int256,int256",
 		otype: "int256",
+	}
+	// Call plugin
+	output, gas := CallAlgorithm(funcName, 100, input)
+	fmt.Printf("output(Hex): %v\n", common.Bytes2Hex(output))
+	fmt.Printf("gas: %v\n", gas)
+}
+
+func TestBlake2b(t *testing.T) {
+	funcName := "Sum256"
+	srcFile := "./testgo/src/blake2b.go"
+
+	plugFile := "./testgo/so/" + funcName + ".so"
+	compilePlugin(srcFile, plugFile)
+
+	// Encode
+	bytesType, _ := abi.NewType("bytes", "", nil)
+	args := abi.Arguments{
+		abi.Argument{Type: bytesType},
+	}
+	a := []byte("Hello world!")
+	input, err := args.Pack(a)
+	if err != nil {
+		t.Error("Encode err:", err)
+	}
+	// Construct Info
+	upgradeAlgorithmInfo[funcName] = codeInfo{
+		code:  "",
+		gas:   10,
+		itype: "bytes",
+		otype: "bytes32",
+	}
+	// Call plugin
+	output, gas := CallAlgorithm(funcName, 100, input)
+	fmt.Printf("output(Hex): %v\n", common.Bytes2Hex(output))
+	fmt.Printf("gas: %v\n", gas)
+}
+
+func TestBlake2s(t *testing.T) {
+	funcName := "Sum256"
+	srcFile := "./testgo/src/blake2s.go"
+
+	plugFile := "./testgo/so/" + funcName + ".so"
+	compilePlugin(srcFile, plugFile)
+
+	// Encode input
+	bytesType, _ := abi.NewType("bytes", "", nil)
+	args := abi.Arguments{
+		abi.Argument{Type: bytesType},
+	}
+	a := []byte("Hello world!")
+	input, err := args.Pack(a)
+	if err != nil {
+		t.Error("Encode err:", err)
+	}
+	// Construct Info
+	upgradeAlgorithmInfo[funcName] = codeInfo{
+		code:  "",
+		gas:   10,
+		itype: "bytes",
+		otype: "bytes32",
 	}
 	// Call plugin
 	output, gas := CallAlgorithm(funcName, 100, input)

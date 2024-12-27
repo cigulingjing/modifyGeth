@@ -913,6 +913,9 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 			}
 		}
 
+		// TODO: How to transimit rate from govern.
+		env.state.SetInterestRate(1) // 1% interest rate
+
 		env.state.SetTxContext(tx.Hash(), env.tcount)
 		logs, err := e.executeTransaction(env, tx)
 		switch {
@@ -930,6 +933,7 @@ func (e *executor) executeTransactions(env *executor_env, txs types.Transactions
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
 			log.Debug("Transaction failed, account skipped", "hash", tx.Hash, "err", err)
+			log.Error("Transaction failed, account skipped", "hash", tx.Hash, "err", err)
 			continue
 		}
 	}
@@ -970,8 +974,6 @@ func (e *executor) executeTransaction(env *executor_env, tx *types.Transaction) 
 			fmt.Printf("Transaction type:%v\n", data[2])
 			switch data[2] {
 			case 1:
-				// attention: the env edit must outer of offchainCom,stateDB don't exist in e
-				env.state.OffChainResult = true
 				// 1.remove identifies field   2. go routine: push result in to channel
 				go e.offchainCom(data[3:])
 			case 2:

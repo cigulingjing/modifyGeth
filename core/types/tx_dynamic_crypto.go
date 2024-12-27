@@ -10,17 +10,19 @@ import (
 
 // DynamicCryptoTx represents a new transaction type with additional fields: CryptoType and SignatureData.
 type DynamicCryptoTx struct {
-	ChainID       *big.Int
-	Nonce         uint64
-	GasTipCap     *big.Int // a.k.a. maxPriorityFeePerGas
-	GasFeeCap     *big.Int // a.k.a. maxFeePerGas
-	Gas           uint64
-	To            *common.Address `rlp:"nil"` // nil means contract creation
-	Value         *big.Int
-	Data          []byte
-	AccessList    AccessList
-	CryptoType    []byte // New field to represent the type of cryptocurrency
-	SignatureData []byte // New field for signature data
+	ChainID        *big.Int
+	Nonce          uint64
+	GasTipCap      *big.Int // a.k.a. maxPriorityFeePerGas
+	GasFeeCap      *big.Int // a.k.a. maxFeePerGas
+	Gas            uint64
+	To             *common.Address `rlp:"nil"` // nil means contract creation
+	Value          *big.Int
+	Data           []byte
+	AccessList     AccessList
+	CryptoType     []byte // New field to represent the type of cryptocurrency
+	SignatureData  []byte // New field for signature data
+	PublicKeyIndex uint64 // New field for public index
+	PublicKey      []byte // New field for public key
 
 	// Signature values
 	V *big.Int `json:"v" gencodec:"required"`
@@ -31,12 +33,14 @@ type DynamicCryptoTx struct {
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *DynamicCryptoTx) copy() TxData {
 	cpy := &DynamicCryptoTx{
-		Nonce:         tx.Nonce,
-		To:            copyAddressPtr(tx.To),
-		Data:          common.CopyBytes(tx.Data),
-		Gas:           tx.Gas,
-		CryptoType:    common.CopyBytes(tx.CryptoType),    // Deep copy of CryptoType
-		SignatureData: common.CopyBytes(tx.SignatureData), // Deep copy of SignatureData
+		Nonce:          tx.Nonce,
+		To:             copyAddressPtr(tx.To),
+		Data:           common.CopyBytes(tx.Data),
+		Gas:            tx.Gas,
+		CryptoType:     common.CopyBytes(tx.CryptoType),
+		SignatureData:  common.CopyBytes(tx.SignatureData),
+		PublicKeyIndex: tx.PublicKeyIndex,
+		PublicKey:      common.CopyBytes(tx.PublicKey),
 		// These are copied below.
 		AccessList: make(AccessList, len(tx.AccessList)),
 		Value:      new(big.Int),
@@ -84,8 +88,10 @@ func (tx *DynamicCryptoTx) gasPrice() *big.Int     { return tx.GasFeeCap }
 func (tx *DynamicCryptoTx) value() *big.Int        { return tx.Value }
 func (tx *DynamicCryptoTx) nonce() uint64          { return tx.Nonce }
 func (tx *DynamicCryptoTx) to() *common.Address    { return tx.To }
-func (tx *DynamicCryptoTx) cryptoType() []byte     { return tx.CryptoType }    // New accessor for CryptoType
-func (tx *DynamicCryptoTx) signatureData() []byte  { return tx.SignatureData } // New accessor for SignatureData
+func (tx *DynamicCryptoTx) cryptoType() []byte     { return tx.CryptoType }
+func (tx *DynamicCryptoTx) signatureData() []byte  { return tx.SignatureData }
+func (tx *DynamicCryptoTx) publicIndex() uint64    { return tx.PublicKeyIndex }
+func (tx *DynamicCryptoTx) publicKey() []byte      { return tx.PublicKey }
 
 func (tx *DynamicCryptoTx) effectiveGasPrice(dst *big.Int, baseFee *big.Int) *big.Int {
 	if baseFee == nil {

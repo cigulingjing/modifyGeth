@@ -173,9 +173,11 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	}
 	blockContext := NewEVMBlockContext(header, bc, author)
 	// Create a new context to be used in the EVM environment
-
 	txContext := NewEVMTxContext(msg)
 	vmenv := vm.NewEVM(blockContext, txContext, statedb, config, cfg)
+
+	// Compute interest: (current number - last number)* Interest rate
+	statedb.ComputeInterest(msg.From, header.Number)
 
 	// check header is None
 	if header.Incentive == nil {

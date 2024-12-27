@@ -77,7 +77,7 @@ type BoundMethod struct {
 }
 
 // Construct function
-func NewBoundMethod(contractAddress *common.Address, abi *abi.ABI, readOnly bool, methodName string, maxGas uint64) *BoundMethod {
+func NewBoundMethod(contractAddress *common.Address, abi *abi.ABI, methodName string, readOnly bool, maxGas uint64) *BoundMethod {
 	return NewMethod(abi, methodName, readOnly, maxGas).Bind(contractAddress)
 }
 

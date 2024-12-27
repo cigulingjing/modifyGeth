@@ -612,3 +612,17 @@ func (tx *Transaction) CryptoType() []byte {
 	}
 	return []byte{}
 }
+
+func (tx *Transaction) PublicKey() []byte {
+	if dynamicCryptoTx, ok := tx.inner.(*DynamicCryptoTx); ok {
+		return dynamicCryptoTx.PublicKey
+	}
+	return []byte{}
+}
+
+func (tx *Transaction) PublicKeyIndex() uint64 {
+	if dynamicCryptoTx, ok := tx.inner.(*DynamicCryptoTx); ok {
+		return dynamicCryptoTx.PublicKeyIndex
+	}
+	return 0
+}

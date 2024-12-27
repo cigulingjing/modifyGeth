@@ -17,6 +17,19 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.CodeHash)
 	w.WriteUint64(obj.SecurityLevel)
+	if obj.Interest == nil {
+		w.Write(rlp.EmptyString)
+	} else {
+		w.WriteUint256(obj.Interest)
+	}
+	if obj.LastBlockNumber == nil {
+		w.Write(rlp.EmptyString)
+	} else {
+		if obj.LastBlockNumber.Sign() == -1 {
+			return rlp.ErrNegativeBigInt
+		}
+		w.WriteBigInt(obj.LastBlockNumber)
+	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

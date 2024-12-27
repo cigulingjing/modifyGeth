@@ -64,8 +64,10 @@ type TransactionArgs struct {
 	HashNonce *hexutil.Big `json:"hashNonce,omitempty"`
 
 	// Introduced by DynamicCryptoTxType
-	CryptoType    *hexutil.Bytes `json:"cryptoType,omitempty"`
-	SignatureData *hexutil.Bytes `json:"signatureData,omitempty"`
+	CryptoType     *hexutil.Bytes  `json:"cryptoType,omitempty"`
+	SignatureData  *hexutil.Bytes  `json:"signatureData,omitempty"`
+	PublicKey      *hexutil.Bytes  `json:"publicKey,omitempty"`
+	PublicKeyIndex *hexutil.Uint64 `json:"publicKeyIndex,omitempty"`
 }
 
 // from retrieves the transaction sender address.
@@ -342,6 +344,14 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 	if args.SignatureData != nil {
 		signatureData = *args.SignatureData
 	}
+	publicKey := []byte{}
+	if args.PublicKey != nil {
+		publicKey = *args.PublicKey
+	}
+	publicKeyIndex := uint64(0)
+	if args.PublicKeyIndex != nil {
+		publicKeyIndex = uint64(*args.PublicKeyIndex)
+	}
 
 	msg := &core.Message{
 		From:              addr,
@@ -359,6 +369,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		HashNonce:         hashNonce,
 		CryptoType:        cryptoType,
 		SignatureData:     signatureData,
+		PublicKey:         publicKey,
+		PublicKeyIndex:    publicKeyIndex,
 	}
 	return msg, nil
 }
@@ -368,6 +380,24 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
+	case args.PublicKey != nil && args.PublicKeyIndex != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicCryptoTx{
+			To:            args.To,
+			ChainID:       (*big.Int)(args.ChainID),
+			Nonce:         uint64(*args.Nonce),
+			Gas:           uint64(*args.Gas),
+			GasFeeCap:     (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:     (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:         (*big.Int)(args.Value),
+			Data:          args.data(),
+			AccessList:    al,
+			CryptoType:    *args.CryptoType,
+			SignatureData: *args.SignatureData,
+		}
 	case args.HashNonce != nil:
 		al := types.AccessList{}
 		if args.AccessList != nil {
