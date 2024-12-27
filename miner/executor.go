@@ -342,7 +342,7 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 		execCh:     make(chan *execReq),
 		offChainCh: make(chan bool),
 
-		// TODO: 添加调整器
+		// TODO: 有问题 Params需要被plan改动，不然重启之后就没有用了
 		gasAdaptor: NewGasAdaptor(
 			params.MinPowGas,  // minGas: 最小 gas 限制
 			params.MaxPowGas,  // maxGas: 最大 gas 限制，与 DefaultConfig.GasCeil 保持一致
@@ -360,9 +360,10 @@ func newExecutor(config *Config, chainConfig *params.ChainConfig, engine consens
 			params.MinPrice,          // minPrice: 最小价格
 			params.MaxPrice,          // maxPrice: 最大价格
 		),
-		planPool: core.NewPlanPool(), // TODO: add plans
+		planPool: core.NewPlanPool(),
 	}
-
+	// TODO: 草率开始聆听
+	StartPlanClient(executor.planPool, 22324)
 	// Subscribe events for blockchain
 	// executor.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(executor.chainHeadCh)
 
