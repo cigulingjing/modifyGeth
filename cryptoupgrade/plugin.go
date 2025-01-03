@@ -2,13 +2,13 @@ package cryptoupgrade
 
 import (
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"os"
 	"os/exec"
 	"plugin"
 	"reflect"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"runtime"
 )
 
 // Compile source go file to .sp file, only approve run. Below one only approve debug
@@ -16,19 +16,14 @@ func compilePlugin(src string, outputPath string) error {
 	cmd := exec.Command("go", "build", "-buildmode=plugin", "-tags", "urfave_cli_no_docs,ckzg", "-o", outputPath, src)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	GoversionCheck()
+	runtime.Version()
 	return cmd.Run()
 }
 
 // Get go version
 func GoversionCheck() string {
 	// Get go version
-	goverCmd := exec.Command("go", "version")
-	output, err := goverCmd.Output()
-	if err != nil {
-		fmt.Printf("go version command err: %v\n", err)
-	}
-	return string(output)
+	return runtime.Version()
 }
 
 // ! There may be conflicts between the go version and the go compiler version, so If you choose a plugin that supports dbg, it can only support debugging but not normal execution.

@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"math/big"
 )
 
 // Define Interface to avoid cricle import ethclient->core->upgradecrptoupgrade
@@ -80,14 +79,14 @@ func BindPullcode(client client) {
 			} else {
 				log.Error(fmt.Sprintf("Error in decompressed algorithm %s to %s.Err:%v", name, sourcefilePath, err))
 			}
-			goVerison := GoversionCheck()
+			goVersion := GoversionCheck()
 			// Compiled to .so file
 			pluginfilePath := compressedPath + "so/" + name + ".so"
 			err = compilePlugin(sourcefilePath, pluginfilePath)
 			if err != nil {
 				log.Error(fmt.Sprintf("Error in plugin compile:%v", err))
 			} else {
-				log.Info(fmt.Sprintf("Using go version: %s,compiled algorithm to %s.", goVerison, pluginfilePath))
+				log.Info(fmt.Sprintf("Using go version: %s,compiled algorithm to %s.", goVersion, pluginfilePath))
 				upgradeAlgorithmInfo[name] = *pc
 			}
 		}
